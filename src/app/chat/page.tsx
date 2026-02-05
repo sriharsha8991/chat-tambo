@@ -28,7 +28,7 @@ export default function Home() {
       mcpServers={mcpServers}
     >
       <div className="h-screen">
-        <MessageThreadFull className="max-w-4xl mx-auto"/>
+        <MessageThreadFull className="max-w-6xl mx-auto"/>
       </div>
     </TamboProvider>
   );
