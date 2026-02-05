@@ -1,21 +1,22 @@
 "use client";
 
-import { AppShell } from "@/components/layout";
 import { PersonaProvider } from "@/contexts/PersonaContext";
 import { TamboWrapper } from "@/components/layout/TamboWrapper";
+import { ChatPage } from "@/components/layout/ChatPage";
 
 /**
  * Zoho People Generative UI Workspace
  * 
- * A persona-aware, intent-driven HR experience where users talk to the UI
- * and the UI adapts using pre-built components.
+ * A clean ChatGPT-style interface where users interact with an intelligent
+ * HR assistant. The UI adapts based on the user's persona (Employee, Manager, HR Admin).
  */
 export default function Home() {
   return (
     <PersonaProvider>
       <TamboWrapper>
-        <AppShell />
+        <ChatPage />
       </TamboWrapper>
     </PersonaProvider>
   );
 }
+

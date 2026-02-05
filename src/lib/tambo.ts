@@ -455,3 +455,75 @@ export const contextHelpers = {
     };
   },
 };
+
+// ============================================
+// PERSONA-SPECIFIC SUGGESTIONS
+// ============================================
+
+export type PersonaRole = "employee" | "manager" | "hr";
+
+export interface StarterSuggestion {
+  id: string;
+  title: string;
+  detailedSuggestion: string;
+  icon?: string;
+}
+
+export const personaSuggestions: Record<PersonaRole, StarterSuggestion[]> = {
+  employee: [
+    {
+      id: "emp-1",
+      title: "🕐 Check In/Out",
+      detailedSuggestion: "Check me in for today",
+    },
+    {
+      id: "emp-2",
+      title: "📅 Leave Balance",
+      detailedSuggestion: "Show my leave balance",
+    },
+    {
+      id: "emp-3",
+      title: "📝 Apply Leave",
+      detailedSuggestion: "I want to apply for leave",
+    },
+  ],
+  manager: [
+    {
+      id: "mgr-1",
+      title: "📋 Pending Approvals",
+      detailedSuggestion: "Show my pending approvals",
+    },
+    {
+      id: "mgr-2",
+      title: "👥 Team Status",
+      detailedSuggestion: "Show my team's attendance today",
+    },
+    {
+      id: "mgr-3",
+      title: "🕐 My Attendance",
+      detailedSuggestion: "Show my attendance status",
+    },
+  ],
+  hr: [
+    {
+      id: "hr-1",
+      title: "📊 HR Dashboard",
+      detailedSuggestion: "Show the HR system dashboard",
+    },
+    {
+      id: "hr-2",
+      title: "📋 All Approvals",
+      detailedSuggestion: "Show all pending approvals across the organization",
+    },
+    {
+      id: "hr-3",
+      title: "📜 Policy Search",
+      detailedSuggestion: "Show me the leave policy",
+    },
+  ],
+};
+
+// Helper to get suggestions for a persona
+export function getSuggestionsForPersona(persona: PersonaRole): StarterSuggestion[] {
+  return personaSuggestions[persona] || personaSuggestions.employee;
+}

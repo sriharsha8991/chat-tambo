@@ -95,8 +95,8 @@ export function RequestStatusList({ requests = [], maxHeight = 400 }: RequestSta
         <ScrollArea style={{ maxHeight }} className="px-6 pb-6">
           <div className="space-y-3">
             {requests.map((request) => {
-              const status = statusConfig[request.status];
-              const type = typeConfig[request.type];
+              const status = statusConfig[request.status] || statusConfig.pending;
+              const type = typeConfig[request.type] || typeConfig.leave;
               const TypeIcon = type.icon;
               const StatusIcon = status.icon;
 
