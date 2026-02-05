@@ -29,7 +29,11 @@ import {
   getPendingApprovals,
   processApproval,
   searchPolicies,
-} from "@/services/hr-data";
+  getAttendanceTrends,
+  getLeaveAnalytics,
+  getTeamMetrics,
+  getHRAnalytics,
+} from "@/services/hr-api-client";
 import type { TamboComponent } from "@tambo-ai/react";
 import { TamboTool } from "@tambo-ai/react";
 import { z } from "zod";
@@ -212,6 +216,92 @@ export const tools: TamboTool[] = [
       content: z.string(),
       lastUpdated: z.string(),
     })),
+  },
+
+  // Analytics Tools
+  {
+    name: "getAttendanceTrends",
+    description: 
+      "Get attendance trends data for visualizing in charts. Use when user asks about " +
+      "attendance patterns, trends, or wants to see attendance data over time. " +
+      "Returns data formatted for bar/line charts.",
+    tool: getAttendanceTrends,
+    inputSchema: z.object({
+      period: z.enum(["week", "month"]).optional().describe("Time period for trends (week or month)"),
+      employeeId: z.string().optional().describe("Filter by employee ID"),
+      department: z.string().optional().describe("Filter by department"),
+    }),
+    outputSchema: z.object({
+      labels: z.array(z.string()),
+      datasets: z.array(z.object({
+        label: z.string(),
+        data: z.array(z.number()),
+        color: z.string().optional(),
+      })),
+    }),
+  },
+  {
+    name: "getLeaveAnalytics",
+    description: 
+      "Get leave analytics data for charts. Use when user asks about leave patterns, " +
+      "distribution of leave types, or leave usage trends. Use type='distribution' for " +
+      "pie charts showing leave type breakdown, type='usage' for line charts showing usage over time.",
+    tool: getLeaveAnalytics,
+    inputSchema: z.object({
+      type: z.enum(["distribution", "usage"]).optional().describe("Type of analytics - distribution (pie) or usage (line)"),
+      employeeId: z.string().optional().describe("Filter by employee ID"),
+      department: z.string().optional().describe("Filter by department"),
+    }),
+    outputSchema: z.object({
+      labels: z.array(z.string()),
+      datasets: z.array(z.object({
+        label: z.string(),
+        data: z.array(z.number()),
+        color: z.string().optional(),
+      })),
+    }),
+  },
+  {
+    name: "getTeamMetrics",
+    description: 
+      "Get team performance metrics for managers. Use when manager asks about team " +
+      "attendance, team status breakdown, or team leave usage. " +
+      "metric='status' for current team status, metric='attendance' for attendance comparison, " +
+      "metric='leave' for leave usage comparison.",
+    tool: getTeamMetrics,
+    inputSchema: z.object({
+      managerId: z.string().optional().describe("Manager's employee ID"),
+      metric: z.enum(["attendance", "leave", "status"]).optional().describe("Type of metric to fetch"),
+    }),
+    outputSchema: z.object({
+      labels: z.array(z.string()),
+      datasets: z.array(z.object({
+        label: z.string(),
+        data: z.array(z.number()),
+        color: z.string().optional(),
+      })),
+    }),
+  },
+  {
+    name: "getHRAnalytics",
+    description: 
+      "Get organization-wide HR analytics for HR admins. Use when HR asks about " +
+      "department distribution, headcount trends, or turnover rates. " +
+      "metric='departmentDistribution' for pie chart, metric='headcount' for trend line, " +
+      "metric='turnover' for turnover rates.",
+    tool: getHRAnalytics,
+    inputSchema: z.object({
+      metric: z.enum(["headcount", "turnover", "departmentDistribution"]).optional()
+        .describe("Type of HR metric to fetch"),
+    }),
+    outputSchema: z.object({
+      labels: z.array(z.string()),
+      datasets: z.array(z.object({
+        label: z.string(),
+        data: z.array(z.number()),
+        color: z.string().optional(),
+      })),
+    }),
   },
 ];
 
@@ -486,6 +576,11 @@ export const personaSuggestions: Record<PersonaRole, StarterSuggestion[]> = {
       title: "📝 Apply Leave",
       detailedSuggestion: "I want to apply for leave",
     },
+    {
+      id: "emp-4",
+      title: "📊 My Attendance Trends",
+      detailedSuggestion: "Show my attendance trends for this month",
+    },
   ],
   manager: [
     {
@@ -500,15 +595,20 @@ export const personaSuggestions: Record<PersonaRole, StarterSuggestion[]> = {
     },
     {
       id: "mgr-3",
-      title: "🕐 My Attendance",
-      detailedSuggestion: "Show my attendance status",
+      title: "📊 Team Analytics",
+      detailedSuggestion: "Show my team's attendance trends chart",
+    },
+    {
+      id: "mgr-4",
+      title: "📈 Leave Analytics",
+      detailedSuggestion: "Show team leave distribution chart",
     },
   ],
   hr: [
     {
       id: "hr-1",
-      title: "📊 HR Dashboard",
-      detailedSuggestion: "Show the HR system dashboard",
+      title: "📊 HR Analytics",
+      detailedSuggestion: "Show organization headcount by department chart",
     },
     {
       id: "hr-2",
@@ -517,6 +617,11 @@ export const personaSuggestions: Record<PersonaRole, StarterSuggestion[]> = {
     },
     {
       id: "hr-3",
+      title: "📈 Org Metrics",
+      detailedSuggestion: "Show organization turnover and attrition trends",
+    },
+    {
+      id: "hr-4",
       title: "📜 Policy Search",
       detailedSuggestion: "Show me the leave policy",
     },

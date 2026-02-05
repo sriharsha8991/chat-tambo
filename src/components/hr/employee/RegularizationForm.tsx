@@ -13,11 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Clock, Send, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Clock, Send, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useTambo } from "@tambo-ai/react";
+import { useHRActions } from "@/hooks";
 
 interface RegularizationFormProps {
+  employeeId?: string;
   onSubmit?: (data: {
     date: string;
     type: "missed_checkin" | "missed_checkout" | "missed_both";
@@ -27,21 +28,24 @@ interface RegularizationFormProps {
   onCancel?: () => void;
 }
 
-export function RegularizationForm({ onSubmit, onCancel }: RegularizationFormProps) {
+export function RegularizationForm({ 
+  employeeId = "emp-001",
+  onSubmit, 
+  onCancel 
+}: RegularizationFormProps) {
   const [date, setDate] = useState("");
   const [type, setType] = useState<string>("");
   const [actualTime, setActualTime] = useState("");
   const [reason, setReason] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [successData, setSuccessData] = useState<{ requestId: string } | null>(null);
 
-  // Get Tambo context to send messages
-  const tambo = useTambo();
+  // Use direct HR actions hook
+  const { submitRegularization, isLoading } = useHRActions();
 
   const handleSubmit = async () => {
     setError(null);
-    setSuccess(false);
+    setSuccessData(null);
 
     if (!date) {
       setError("Please select a date");
@@ -60,7 +64,6 @@ export function RegularizationForm({ onSubmit, onCancel }: RegularizationFormPro
       return;
     }
 
-    setIsSubmitting(true);
     try {
       if (onSubmit) {
         await onSubmit({
@@ -69,25 +72,33 @@ export function RegularizationForm({ onSubmit, onCancel }: RegularizationFormPro
           actualTime,
           reason: reason.trim(),
         });
-      } else if (tambo?.sendThreadMessage) {
-        const typeLabel = type === "missed_checkin" ? "missed check-in" : 
-                         type === "missed_checkout" ? "missed check-out" : 
-                         "missed check-in and check-out";
-        const message = `Submit regularization request for ${date}: ${typeLabel} at ${actualTime}. Reason: ${reason.trim()}`;
+        setSuccessData({ requestId: "custom" });
+      } else {
+        // Convert type for API compatibility
+        const requestType = type === "missed_both" ? "missed_checkin" : type as "missed_checkin" | "missed_checkout" | "correction";
         
-        await tambo.sendThreadMessage(message, { streamResponse: true });
+        // Direct tool call - no chat message needed!
+        const result = await submitRegularization({
+          employeeId,
+          date,
+          requestType,
+          requestedTime: actualTime,
+          reason: reason.trim(),
+        });
+        
+        if (result.success && result.data) {
+          setSuccessData(result.data);
+          // Reset form
+          setDate("");
+          setType("");
+          setActualTime("");
+          setReason("");
+        } else {
+          setError(result.error || "Failed to submit regularization request. Please try again.");
+        }
       }
-      
-      setSuccess(true);
-      // Reset form
-      setDate("");
-      setType("");
-      setActualTime("");
-      setReason("");
     } catch {
       setError("Failed to submit regularization request. Please try again.");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -113,11 +124,15 @@ export function RegularizationForm({ onSubmit, onCancel }: RegularizationFormPro
           </Alert>
         )}
 
-        {success && (
-          <Alert className="border-green-200 bg-green-50">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              Regularization request submitted successfully! Check the chat for confirmation.
+        {successData && (
+          <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/50">
+            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <AlertDescription className="text-green-800 dark:text-green-200">
+              <div className="space-y-1">
+                <p className="font-medium">✓ Regularization request submitted!</p>
+                <p className="text-sm">Request ID: {successData.requestId}</p>
+                <p className="text-sm">Pending manager approval</p>
+              </div>
             </AlertDescription>
           </Alert>
         )}
@@ -193,17 +208,21 @@ export function RegularizationForm({ onSubmit, onCancel }: RegularizationFormPro
       </CardContent>
       <CardFooter className="flex gap-2">
         {onCancel && (
-          <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>
+          <Button variant="outline" onClick={onCancel} disabled={isLoading}>
             Cancel
           </Button>
         )}
         <Button
           className="flex-1"
           onClick={handleSubmit}
-          disabled={isSubmitting || !date || !type || !actualTime || !reason.trim()}
+          disabled={isLoading || !date || !type || !actualTime || !reason.trim() || !!successData}
         >
-          <Send className="mr-2 h-4 w-4" />
-          {isSubmitting ? "Submitting..." : "Submit Request"}
+          {isLoading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="mr-2 h-4 w-4" />
+          )}
+          {isLoading ? "Submitting..." : successData ? "Submitted ✓" : "Submit Request"}
         </Button>
       </CardFooter>
     </Card>

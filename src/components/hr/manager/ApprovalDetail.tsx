@@ -17,10 +17,11 @@ import {
   User,
   Building2,
   FileText,
-  ArrowLeft
+  ArrowLeft,
+  Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTambo } from "@tambo-ai/react";
+import { useHRActions } from "@/hooks";
 
 interface ApprovalItem {
   id: string;
@@ -58,9 +59,10 @@ export function ApprovalDetail({
   const [comment, setComment] = useState("");
   const [action, setAction] = useState<"approve" | "reject" | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isProcessed, setIsProcessed] = useState(false);
 
-  // Get Tambo context to send messages
-  const tambo = useTambo();
+  // Use direct HR actions hook
+  const { approveRequest, rejectRequest, isLoading: actionLoading } = useHRActions();
 
   // Handle missing approval
   if (!approval) {
@@ -112,28 +114,40 @@ export function ApprovalDetail({
       if (selectedAction === "approve") {
         if (onApprove) {
           onApprove(approval.id, comment || undefined);
-        } else if (tambo?.sendThreadMessage) {
-          const msg = comment 
-            ? `Approve ${approval.employeeName}'s ${type.label} request (ID: ${approval.id}) with comment: ${comment}`
-            : `Approve ${approval.employeeName}'s ${type.label} request (ID: ${approval.id})`;
-          await tambo.sendThreadMessage(msg, { streamResponse: true });
+          setMessage({ type: "success", text: `Request approved successfully!` });
+          setIsProcessed(true);
+        } else {
+          // Direct tool call - no chat message needed!
+          const result = await approveRequest(approval.id, comment || undefined);
+          if (result.success) {
+            setMessage({ type: "success", text: `✓ ${approval.employeeName}'s ${type.label} approved!` });
+            setIsProcessed(true);
+          } else {
+            setMessage({ type: "error", text: result.error || "Failed to approve request." });
+          }
         }
-        setMessage({ type: "success", text: `Request approved successfully!` });
       } else {
         if (onReject) {
           onReject(approval.id, comment || undefined);
-        } else if (tambo?.sendThreadMessage) {
-          const msg = comment 
-            ? `Reject ${approval.employeeName}'s ${type.label} request (ID: ${approval.id}) with reason: ${comment}`
-            : `Reject ${approval.employeeName}'s ${type.label} request (ID: ${approval.id})`;
-          await tambo.sendThreadMessage(msg, { streamResponse: true });
+          setMessage({ type: "success", text: `Request rejected.` });
+          setIsProcessed(true);
+        } else {
+          // Direct tool call - no chat message needed!
+          const result = await rejectRequest(approval.id, comment || undefined);
+          if (result.success) {
+            setMessage({ type: "success", text: `✓ ${approval.employeeName}'s ${type.label} rejected.` });
+            setIsProcessed(true);
+          } else {
+            setMessage({ type: "error", text: result.error || "Failed to reject request." });
+          }
         }
-        setMessage({ type: "success", text: `Request rejected.` });
       }
     } catch {
       setMessage({ type: "error", text: "Failed to process request. Please try again." });
     }
   };
+
+  const isProcessing = actionLoading || isLoading;
 
   return (
     <Card className="w-full max-w-lg">
@@ -158,8 +172,20 @@ export function ApprovalDetail({
       <CardContent className="space-y-4">
         {/* Status Message */}
         {message && (
-          <Alert variant={message.type === "error" ? "destructive" : "default"} className={message.type === "success" ? "border-green-200 bg-green-50 text-green-800" : ""}>
-            <AlertDescription>{message.text}</AlertDescription>
+          <Alert 
+            variant={message.type === "error" ? "destructive" : "default"} 
+            className={cn(
+              message.type === "success" && "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/50"
+            )}
+          >
+            {message.type === "success" ? (
+              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+            ) : (
+              <XCircle className="h-4 w-4" />
+            )}
+            <AlertDescription className={message.type === "success" ? "text-green-800 dark:text-green-200" : ""}>
+              {message.text}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -218,30 +244,48 @@ export function ApprovalDetail({
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={3}
-            disabled={isLoading}
+            disabled={isProcessing || isProcessed}
           />
         </div>
       </CardContent>
       <CardFooter className="flex gap-2">
-        <Button
-          size="lg"
-          className="flex-1"
-          onClick={() => handleAction("approve")}
-          disabled={isLoading}
-        >
-          <CheckCircle2 className="mr-2 h-5 w-5" />
-          {isLoading && action === "approve" ? "Approving..." : "Approve"}
-        </Button>
-        <Button
-          size="lg"
-          variant="outline"
-          className="flex-1"
-          onClick={() => handleAction("reject")}
-          disabled={isLoading}
-        >
-          <XCircle className="mr-2 h-5 w-5" />
-          {isLoading && action === "reject" ? "Rejecting..." : "Reject"}
-        </Button>
+        {isProcessed ? (
+          <div className="w-full text-center py-2">
+            <p className="text-sm text-muted-foreground">
+              {action === "approve" ? "✓ Approved" : "✓ Rejected"} - Request processed
+            </p>
+          </div>
+        ) : (
+          <>
+            <Button
+              size="lg"
+              className="flex-1"
+              onClick={() => handleAction("approve")}
+              disabled={isProcessing}
+            >
+              {isProcessing && action === "approve" ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-2 h-5 w-5" />
+              )}
+              {isProcessing && action === "approve" ? "Approving..." : "Approve"}
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="flex-1"
+              onClick={() => handleAction("reject")}
+              disabled={isProcessing}
+            >
+              {isProcessing && action === "reject" ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <XCircle className="mr-2 h-5 w-5" />
+              )}
+              {isProcessing && action === "reject" ? "Rejecting..." : "Reject"}
+            </Button>
+          </>
+        )}
       </CardFooter>
     </Card>
   );

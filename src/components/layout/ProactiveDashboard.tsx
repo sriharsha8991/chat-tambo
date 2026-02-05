@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { usePersona, useUserContext } from "@/contexts/PersonaContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,8 +12,10 @@ import {
   CheckCircle, 
   FileText,
   TrendingUp,
-  Bell
+  Bell,
+  RefreshCw
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { PersonaRole } from "@/types/hr";
 
 // Import HR Components
@@ -28,7 +30,7 @@ import {
   PolicyViewer,
 } from "@/components/hr";
 
-// Import mock data services
+// Import API client (uses fetch, works in browser)
 import {
   getAttendanceStatus,
   getLeaveBalance,
@@ -37,7 +39,7 @@ import {
   getTeamMembers,
   getSystemMetrics,
   searchPolicies,
-} from "@/services/hr-data";
+} from "@/services/hr-api-client";
 
 function ProactiveAlert({ type, title, message }: { type: "warning" | "info"; title: string; message: string }) {
   return (
@@ -62,27 +64,45 @@ function EmployeeDashboard() {
   const [requests, setRequests] = useState<Awaited<ReturnType<typeof getRequestStatus>>>([]);
   const [attendance, setAttendance] = useState<Awaited<ReturnType<typeof getAttendanceStatus>> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchData = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setIsRefreshing(true);
+    else setIsLoading(true);
+    
+    try {
+      const [balances, reqs, att] = await Promise.all([
+        getLeaveBalance({ employeeId: currentUser.id }),
+        getRequestStatus({ employeeId: currentUser.id }),
+        getAttendanceStatus({ employeeId: currentUser.id }),
+      ]);
+      setLeaveBalances(balances);
+      setRequests(reqs);
+      setAttendance(att);
+    } catch (error) {
+      console.error("Failed to fetch employee data:", error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [currentUser.id]);
 
   useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const [balances, reqs, att] = await Promise.all([
-          getLeaveBalance({ employeeId: currentUser.id }),
-          getRequestStatus({ employeeId: currentUser.id }),
-          getAttendanceStatus({ employeeId: currentUser.id }),
-        ]);
-        setLeaveBalances(balances);
-        setRequests(reqs);
-        setAttendance(att);
-      } catch (error) {
-        console.error("Failed to fetch employee data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
     fetchData();
-  }, [currentUser.id]);
+    
+    // Auto-refresh when window gains focus
+    const handleFocus = () => fetchData(true);
+    window.addEventListener("focus", handleFocus);
+    
+    // Listen for custom refresh event (from chat actions)
+    const handleRefresh = () => fetchData(true);
+    window.addEventListener("hr-data-updated", handleRefresh);
+    
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("hr-data-updated", handleRefresh);
+    };
+  }, [fetchData]);
 
   const totalLeaveRemaining = leaveBalances.reduce((sum, b) => sum + b.remainingDays, 0);
   const pendingCount = requests.filter(r => r.status === "pending").length;

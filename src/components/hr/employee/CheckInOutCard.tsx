@@ -1,71 +1,143 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, LogIn, LogOut, CheckCircle2, AlertCircle } from "lucide-react";
+import { Clock, LogIn, LogOut, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useTambo } from "@tambo-ai/react";
+import { useHRActions } from "@/hooks";
 
 interface CheckInOutCardProps {
   checkInTime?: string;
   checkOutTime?: string;
   status: "not_checked_in" | "checked_in" | "checked_out";
   totalHours?: string;
+  employeeId?: string;
   onCheckIn?: () => void;
   onCheckOut?: () => void;
   isLoading?: boolean;
 }
 
 export function CheckInOutCard({
-  checkInTime,
-  checkOutTime,
-  status = "not_checked_in",
-  totalHours,
+  checkInTime: initialCheckInTime,
+  checkOutTime: initialCheckOutTime,
+  status: initialStatus = "not_checked_in",
+  totalHours: initialTotalHours,
+  employeeId = "emp-001", // Default for demo
   onCheckIn,
   onCheckOut,
   isLoading = false,
 }: CheckInOutCardProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Local state to update UI after actions
+  const [checkInTime, setCheckInTime] = useState(initialCheckInTime);
+  const [checkOutTime, setCheckOutTime] = useState(initialCheckOutTime);
+  const [status, setStatus] = useState(initialStatus);
+  const [totalHours, setTotalHours] = useState(initialTotalHours);
+  
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  
+  // Use direct HR actions hook
+  const { checkIn, checkOut, isLoading: actionLoading } = useHRActions();
 
-  // Get Tambo context to send messages
-  const tambo = useTambo();
+  // Sync props to state when they change
+  useEffect(() => {
+    setCheckInTime(initialCheckInTime);
+    setCheckOutTime(initialCheckOutTime);
+    setStatus(initialStatus);
+    setTotalHours(initialTotalHours);
+  }, [initialCheckInTime, initialCheckOutTime, initialStatus, initialTotalHours]);
 
-  const handleAction = async (action: "check_in" | "check_out") => {
-    setIsSubmitting(true);
+  const handleCheckIn = async () => {
     setMessage(null);
-    try {
-      if (action === "check_in") {
-        if (onCheckIn) {
-          await onCheckIn();
-        } else if (tambo?.sendThreadMessage) {
-          await tambo.sendThreadMessage("Check me in for today", { streamResponse: true });
-        }
-        setMessage({ type: "success", text: "Check-in request submitted!" });
-      } else if (action === "check_out") {
-        if (onCheckOut) {
-          await onCheckOut();
-        } else if (tambo?.sendThreadMessage) {
-          await tambo.sendThreadMessage("Check me out for today", { streamResponse: true });
-        }
-        setMessage({ type: "success", text: "Check-out request submitted!" });
+    
+    // If custom handler provided, use it
+    if (onCheckIn) {
+      onCheckIn();
+      return;
+    }
+    
+    // Direct tool call - no chat message needed!
+    const result = await checkIn(employeeId);
+    
+    if (result.success && result.data) {
+      // Update local state immediately
+      const time = new Date(result.data.timestamp).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      });
+      setCheckInTime(time);
+      setStatus("checked_in");
+      setMessage({ 
+        type: "success", 
+        text: `✓ ${result.data.message}` 
+      });
+    } else {
+      setMessage({ 
+        type: "error", 
+        text: result.error || "Failed to check in. Please try again." 
+      });
+    }
+  };
+
+  const handleCheckOut = async () => {
+    setMessage(null);
+    
+    // If custom handler provided, use it
+    if (onCheckOut) {
+      onCheckOut();
+      return;
+    }
+    
+    // Direct tool call - no chat message needed!
+    const result = await checkOut(employeeId);
+    
+    if (result.success && result.data) {
+      // Update local state immediately
+      const time = new Date(result.data.timestamp).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      });
+      setCheckOutTime(time);
+      setStatus("checked_out");
+      
+      // Calculate total hours if we have check-in time
+      if (checkInTime) {
+        const checkInDate = new Date(`2000-01-01T${checkInTime}`);
+        const checkOutDate = new Date(`2000-01-01T${time}`);
+        const diffMs = checkOutDate.getTime() - checkInDate.getTime();
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        setTotalHours(`${diffHours}h ${diffMins}m`);
       }
-    } catch {
-      setMessage({ type: "error", text: "Failed to submit. Please try again." });
-    } finally {
-      setIsSubmitting(false);
+      
+      setMessage({ 
+        type: "success", 
+        text: `✓ ${result.data.message}` 
+      });
+    } else {
+      setMessage({ 
+        type: "error", 
+        text: result.error || "Failed to check out. Please try again." 
+      });
     }
   };
 
   const formatTime = (time: string) => {
-    const date = new Date(`2000-01-01T${time}`);
-    return date.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
+    try {
+      const date = new Date(`2000-01-01T${time}`);
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch {
+      return time;
+    }
   };
 
   const getStatusConfig = () => {
@@ -75,35 +147,35 @@ export function CheckInOutCard({
           icon: AlertCircle,
           text: "Not checked in yet",
           color: "text-amber-500",
-          bgColor: "bg-amber-50",
+          bgColor: "bg-amber-50 dark:bg-amber-950/30",
         };
       case "checked_in":
         return {
           icon: Clock,
           text: "Currently working",
           color: "text-green-500",
-          bgColor: "bg-green-50",
+          bgColor: "bg-green-50 dark:bg-green-950/30",
         };
       case "checked_out":
         return {
           icon: CheckCircle2,
           text: "Day complete",
           color: "text-blue-500",
-          bgColor: "bg-blue-50",
+          bgColor: "bg-blue-50 dark:bg-blue-950/30",
         };
       default:
-        // Fallback for undefined or unexpected status
         return {
           icon: AlertCircle,
           text: "Not checked in yet",
           color: "text-amber-500",
-          bgColor: "bg-amber-50",
+          bgColor: "bg-amber-50 dark:bg-amber-950/30",
         };
     }
   };
 
   const statusConfig = getStatusConfig();
   const StatusIcon = statusConfig.icon;
+  const isProcessing = actionLoading || isLoading;
 
   return (
     <Card className="w-full max-w-md">
@@ -114,16 +186,21 @@ export function CheckInOutCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Status Message */}
+        {/* Status Message - Shows result inline */}
         {message && (
-          <Alert variant={message.type === "error" ? "destructive" : "default"} 
-                 className={message.type === "success" ? "border-green-200 bg-green-50" : ""}>
+          <Alert 
+            variant={message.type === "error" ? "destructive" : "default"} 
+            className={cn(
+              "transition-all",
+              message.type === "success" && "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/50"
+            )}
+          >
             {message.type === "success" ? (
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
             ) : (
               <AlertCircle className="h-4 w-4" />
             )}
-            <AlertDescription className={message.type === "success" ? "text-green-800" : ""}>
+            <AlertDescription className={message.type === "success" ? "text-green-800 dark:text-green-200" : ""}>
               {message.text}
             </AlertDescription>
           </Alert>
@@ -172,11 +249,15 @@ export function CheckInOutCard({
             <Button
               className="w-full"
               size="lg"
-              onClick={() => handleAction("check_in")}
-              disabled={isSubmitting || isLoading}
+              onClick={handleCheckIn}
+              disabled={isProcessing}
             >
-              <LogIn className="mr-2 h-5 w-5" />
-              {isSubmitting ? "Checking in..." : "Check In"}
+              {isProcessing ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <LogIn className="mr-2 h-5 w-5" />
+              )}
+              {isProcessing ? "Checking in..." : "Check In"}
             </Button>
           )}
           {status === "checked_in" && (
@@ -184,11 +265,15 @@ export function CheckInOutCard({
               className="w-full"
               size="lg"
               variant="secondary"
-              onClick={() => handleAction("check_out")}
-              disabled={isSubmitting || isLoading}
+              onClick={handleCheckOut}
+              disabled={isProcessing}
             >
-              <LogOut className="mr-2 h-5 w-5" />
-              {isSubmitting ? "Checking out..." : "Check Out"}
+              {isProcessing ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <LogOut className="mr-2 h-5 w-5" />
+              )}
+              {isProcessing ? "Checking out..." : "Check Out"}
             </Button>
           )}
           {status === "checked_out" && (

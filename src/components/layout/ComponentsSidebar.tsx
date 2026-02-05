@@ -24,13 +24,17 @@ import {
   ListChecks,
   UserCheck,
   ClipboardList,
+  BarChart3,
+  PieChart,
+  TrendingUp,
+  Activity,
 } from "lucide-react";
 
 interface ComponentItem {
   name: string;
   description: string;
   icon: React.ReactNode;
-  category: "employee" | "manager" | "admin" | "shared";
+  category: "employee" | "manager" | "admin" | "analytics";
 }
 
 const hrComponents: ComponentItem[] = [
@@ -105,20 +109,46 @@ const hrComponents: ComponentItem[] = [
     icon: <BookOpen className="h-4 w-4" />,
     category: "admin",
   },
+
+  // Analytics Components
+  {
+    name: "Attendance Trends",
+    description: "View attendance patterns over time",
+    icon: <TrendingUp className="h-4 w-4" />,
+    category: "analytics",
+  },
+  {
+    name: "Leave Analytics",
+    description: "Leave distribution & usage charts",
+    icon: <PieChart className="h-4 w-4" />,
+    category: "analytics",
+  },
+  {
+    name: "Team Metrics",
+    description: "Team performance charts",
+    icon: <BarChart3 className="h-4 w-4" />,
+    category: "analytics",
+  },
+  {
+    name: "HR Analytics",
+    description: "Organization-wide HR metrics",
+    icon: <Activity className="h-4 w-4" />,
+    category: "analytics",
+  },
 ];
 
 const categoryLabels: Record<string, string> = {
   employee: "Employee",
   manager: "Manager",
   admin: "HR Admin",
-  shared: "Shared",
+  analytics: "Analytics",
 };
 
 const categoryColors: Record<string, string> = {
   employee: "text-blue-500",
   manager: "text-purple-500",
   admin: "text-emerald-500",
-  shared: "text-gray-500",
+  analytics: "text-orange-500",
 };
 
 interface ComponentsSidebarProps {
@@ -137,7 +167,7 @@ export function ComponentsSidebar({ onComponentClick, className }: ComponentsSid
     return acc;
   }, {} as Record<string, ComponentItem[]>);
 
-  const categoryOrder = ["employee", "manager", "admin"];
+  const categoryOrder = ["employee", "manager", "admin", "analytics"];
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -218,7 +248,8 @@ export function ComponentsSidebar({ onComponentClick, className }: ComponentsSid
                               "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
                               category === "employee" && "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
                               category === "manager" && "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
-                              category === "admin" && "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              category === "admin" && "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400",
+                              category === "analytics" && "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
                             )}>
                               {comp.icon}
                             </div>
