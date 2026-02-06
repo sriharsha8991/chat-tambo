@@ -8,6 +8,9 @@ export type RegularizationRequest = Database['public']['Tables']['regularization
 export type LeaveBalanceRow = Database['public']['Tables']['leave_balances']['Row'];
 export type NotificationRow = Database['public']['Tables']['notifications']['Row'];
 export type PolicyRow = Database['public']['Tables']['policies']['Row'];
+export type AnnouncementRow = Database['public']['Tables']['announcements']['Row'];
+export type DocumentRow = Database['public']['Tables']['documents']['Row'];
+export type DocumentAcknowledgmentRow = Database['public']['Tables']['document_acknowledgments']['Row'];
 
 export type { Database };
 export { isSupabaseConfigured };

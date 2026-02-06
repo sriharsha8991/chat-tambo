@@ -158,13 +158,13 @@ export async function approveLeaveRequest(
   }
 
   // Update leave balance
-  const currentYear = new Date().getFullYear();
+  const requestYear = new Date(requestRecord.start_date).getFullYear();
   const { data: balanceData } = await getDb()
     .from('leave_balances')
     .select('used_days')
     .eq('employee_id', requestRecord.employee_id)
     .eq('leave_type', requestRecord.leave_type)
-    .eq('year', currentYear)
+    .eq('year', requestYear)
     .single();
 
   const leaveBalance = balanceData as { used_days: number } | null;
@@ -174,7 +174,7 @@ export async function approveLeaveRequest(
       .update({ used_days: leaveBalance.used_days + requestRecord.days_requested })
       .eq('employee_id', requestRecord.employee_id)
       .eq('leave_type', requestRecord.leave_type)
-      .eq('year', currentYear);
+      .eq('year', requestYear);
   }
 
   // Create notification for employee

@@ -9,7 +9,7 @@ export async function getNotifications(employeeId: string): Promise<Notification
   const { data, error } = await getDb()
     .from('notifications')
     .select('*')
-    .eq('user_id', employeeUuid)
+    .eq('employee_id', employeeUuid)
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -30,13 +30,16 @@ export async function createNotification(notification: {
 }): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
 
+  const employeeUuid = await resolveEmployeeUuid(notification.employeeId);
+
   const { error } = await getDb()
     .from('notifications')
     .insert({
-      user_id: notification.employeeId,
+      employee_id: employeeUuid,
       type: notification.type,
       title: notification.title,
       message: notification.message,
+      related_id: notification.relatedId || null,
     });
 
   if (error) {
@@ -52,7 +55,7 @@ export async function markNotificationRead(notificationId: string): Promise<bool
 
   const { error } = await getDb()
     .from('notifications')
-    .update({ read: true })
+    .update({ is_read: true })
     .eq('id', notificationId);
 
   if (error) {

@@ -9,14 +9,19 @@
 
 import { isSupabaseConfigured } from '@/lib/supabase';
 import * as supabaseHR from './supabase-hr';
-import * as dataStore from './dataStore';
 
 // ============================================
 // BACKEND DETECTION
 // ============================================
 
 export function getBackendType(): 'supabase' | 'json' {
-  return isSupabaseConfigured() ? 'supabase' : 'json';
+  return 'supabase';
+}
+
+function requireSupabase(): void {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+  }
 }
 
 // ============================================
@@ -24,24 +29,72 @@ export function getBackendType(): 'supabase' | 'json' {
 // ============================================
 
 export async function getEmployee(employeeId: string) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.getEmployee(employeeId);
-  }
-  return dataStore.getEmployee(employeeId);
+  requireSupabase();
+  return supabaseHR.getEmployee(employeeId);
 }
 
 export async function getDirectReports(managerId: string) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.getDirectReports(managerId);
-  }
-  return dataStore.getDirectReports(managerId);
+  requireSupabase();
+  return supabaseHR.getDirectReports(managerId);
 }
 
 export async function getAllEmployees() {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.getAllEmployees();
-  }
-  return dataStore.getAllEmployees();
+  requireSupabase();
+  return supabaseHR.getAllEmployees();
+}
+
+// ============================================
+// TEAM OPERATIONS
+// ============================================
+
+export async function getTeamMembers(managerId: string) {
+  requireSupabase();
+  const directReports = await getDirectReports(managerId);
+  const today = new Date().toISOString().split('T')[0];
+  const supabaseReports = directReports as Array<{
+    id: string;
+    employee_id: string;
+    name: string;
+  }>;
+
+  const teamMembers = await Promise.all(
+    supabaseReports.map(async (emp) => {
+      const [attendanceRecords, leaveRequests] = await Promise.all([
+        supabaseHR.getAttendanceRecords(emp.id),
+        supabaseHR.getLeaveRequests(emp.id),
+      ]);
+
+      const todayAttendance = attendanceRecords.find((record) => record.date === today);
+      const onLeave = leaveRequests.some(
+        (request) =>
+          request.status === 'approved' &&
+          request.start_date <= today &&
+          request.end_date >= today
+      );
+
+      let status: 'available' | 'wfh' | 'on_leave' | 'absent' = 'available';
+      if (onLeave) {
+        status = 'on_leave';
+      } else if (todayAttendance?.status === 'wfh') {
+        status = 'wfh';
+      }
+
+      return {
+        id: emp.id,
+        employeeId: emp.employee_id,
+        name: emp.name,
+        status,
+        todayAttendance: todayAttendance
+          ? {
+              checkIn: todayAttendance.check_in || undefined,
+              checkOut: todayAttendance.check_out || undefined,
+            }
+          : undefined,
+      };
+    })
+  );
+
+  return teamMembers;
 }
 
 // ============================================
@@ -49,19 +102,8 @@ export async function getAllEmployees() {
 // ============================================
 
 export async function getLeaveBalances(employeeId: string) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.getLeaveBalances(employeeId);
-  }
-  
-  const balances = dataStore.getLeaveBalances(employeeId);
-  if (!balances) return [];
-  
-  return Object.entries(balances).map(([type, balance]) => ({
-    leave_type: type,
-    total_days: balance.total,
-    used_days: balance.used,
-    remaining_days: balance.total - balance.used,
-  }));
+  requireSupabase();
+  return supabaseHR.getLeaveBalances(employeeId);
 }
 
 export async function updateLeaveBalance(
@@ -69,11 +111,8 @@ export async function updateLeaveBalance(
   leaveType: string,
   usedDays: number
 ) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.updateLeaveBalance(employeeId, leaveType, usedDays);
-  }
-  dataStore.updateLeaveBalance(employeeId, leaveType as keyof dataStore.LeaveBalances, usedDays);
-  return true;
+  requireSupabase();
+  return supabaseHR.updateLeaveBalance(employeeId, leaveType, usedDays);
 }
 
 // ============================================
@@ -81,17 +120,13 @@ export async function updateLeaveBalance(
 // ============================================
 
 export async function getLeaveRequests(employeeId?: string) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.getLeaveRequests(employeeId);
-  }
-  return dataStore.getLeaveRequests(employeeId);
+  requireSupabase();
+  return supabaseHR.getLeaveRequests(employeeId);
 }
 
 export async function getPendingLeaveRequests(managerId?: string) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.getPendingLeaveRequests(managerId);
-  }
-  return dataStore.getPendingLeaveRequests(managerId);
+  requireSupabase();
+  return supabaseHR.getPendingLeaveRequests(managerId);
 }
 
 export async function createLeaveRequest(request: {
@@ -102,26 +137,9 @@ export async function createLeaveRequest(request: {
   daysRequested: number;
   reason: string;
 }) {
-  if (isSupabaseConfigured()) {
-    const result = await supabaseHR.createLeaveRequest(request);
-    return result ? { id: result.id } : null;
-  }
-  
-  const result = dataStore.createLeaveRequest({
-    employeeId: request.employeeId,
-    leaveType: request.leaveType as 'casual' | 'sick' | 'earned' | 'wfh' | 'comp_off',
-    startDate: request.startDate,
-    endDate: request.endDate,
-    daysRequested: request.daysRequested,
-    reason: request.reason,
-    status: 'pending',
-    submittedAt: new Date().toISOString(),
-    reviewedAt: null,
-    reviewedBy: null,
-    reviewComment: null,
-  });
-  
-  return { id: result.id };
+  requireSupabase();
+  const result = await supabaseHR.createLeaveRequest(request);
+  return result ? { id: result.id } : null;
 }
 
 export async function approveLeaveRequest(
@@ -129,10 +147,8 @@ export async function approveLeaveRequest(
   reviewerId: string,
   comment?: string
 ) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.approveLeaveRequest(requestId, reviewerId, comment);
-  }
-  return dataStore.approveLeaveRequest(requestId, reviewerId, comment);
+  requireSupabase();
+  return supabaseHR.approveLeaveRequest(requestId, reviewerId, comment);
 }
 
 export async function rejectLeaveRequest(
@@ -140,10 +156,8 @@ export async function rejectLeaveRequest(
   reviewerId: string,
   comment?: string
 ) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.rejectLeaveRequest(requestId, reviewerId, comment);
-  }
-  return dataStore.rejectLeaveRequest(requestId, reviewerId, comment);
+  requireSupabase();
+  return supabaseHR.rejectLeaveRequest(requestId, reviewerId, comment);
 }
 
 // ============================================
@@ -151,17 +165,13 @@ export async function rejectLeaveRequest(
 // ============================================
 
 export async function getAttendanceRecords(employeeId: string) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.getAttendanceRecords(employeeId);
-  }
-  return dataStore.getAttendanceRecords(employeeId);
+  requireSupabase();
+  return supabaseHR.getAttendanceRecords(employeeId);
 }
 
 export async function getTodayAttendance(employeeId: string) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.getTodayAttendance(employeeId);
-  }
-  return dataStore.getTodayAttendance(employeeId);
+  requireSupabase();
+  return supabaseHR.getTodayAttendance(employeeId);
 }
 
 export async function addOrUpdateAttendance(
@@ -174,26 +184,15 @@ export async function addOrUpdateAttendance(
     hoursWorked?: number | null;
   }
 ) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.upsertAttendance({
-      employeeId,
-      date: record.date,
-      checkIn: record.checkIn,
-      checkOut: record.checkOut,
-      status: record.status,
-      hoursWorked: record.hoursWorked,
-    });
-  }
-  
-  dataStore.addOrUpdateAttendance(employeeId, {
+  requireSupabase();
+  return supabaseHR.upsertAttendance({
+    employeeId,
     date: record.date,
-    checkIn: record.checkIn || null,
-    checkOut: record.checkOut || null,
+    checkIn: record.checkIn,
+    checkOut: record.checkOut,
     status: record.status,
-    hoursWorked: record.hoursWorked || null,
+    hoursWorked: record.hoursWorked,
   });
-  
-  return true;
 }
 
 // ============================================
@@ -201,10 +200,8 @@ export async function addOrUpdateAttendance(
 // ============================================
 
 export async function getRegularizationRequests(employeeId?: string) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.getRegularizationRequests(employeeId);
-  }
-  return dataStore.getRegularizationRequests(employeeId);
+  requireSupabase();
+  return supabaseHR.getRegularizationRequests(employeeId);
 }
 
 export async function createRegularizationRequest(request: {
@@ -214,25 +211,9 @@ export async function createRegularizationRequest(request: {
   requestedTime: string;
   reason: string;
 }) {
-  if (isSupabaseConfigured()) {
-    const result = await supabaseHR.createRegularizationRequest(request);
-    return result ? { id: result.id } : null;
-  }
-  
-  const result = dataStore.createRegularizationRequest({
-    employeeId: request.employeeId,
-    date: request.date,
-    requestType: request.requestType,
-    requestedTime: request.requestedTime,
-    reason: request.reason,
-    status: 'pending',
-    submittedAt: new Date().toISOString(),
-    reviewedAt: null,
-    reviewedBy: null,
-    reviewComment: null,
-  });
-  
-  return { id: result.id };
+  requireSupabase();
+  const result = await supabaseHR.createRegularizationRequest(request);
+  return result ? { id: result.id } : null;
 }
 
 export async function approveRegularization(
@@ -240,10 +221,8 @@ export async function approveRegularization(
   reviewerId: string,
   comment?: string
 ) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.approveRegularization(requestId, reviewerId, comment);
-  }
-  return dataStore.approveRegularization(requestId, reviewerId, comment);
+  requireSupabase();
+  return supabaseHR.approveRegularization(requestId, reviewerId, comment);
 }
 
 export async function rejectRegularization(
@@ -251,10 +230,8 @@ export async function rejectRegularization(
   reviewerId: string,
   comment?: string
 ) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.rejectRegularization(requestId, reviewerId, comment);
-  }
-  return dataStore.rejectRegularization(requestId, reviewerId, comment);
+  requireSupabase();
+  return supabaseHR.rejectRegularization(requestId, reviewerId, comment);
 }
 
 // ============================================
@@ -262,18 +239,13 @@ export async function rejectRegularization(
 // ============================================
 
 export async function getNotifications(employeeId: string) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.getNotifications(employeeId);
-  }
-  return dataStore.getNotifications(employeeId);
+  requireSupabase();
+  return supabaseHR.getNotifications(employeeId);
 }
 
 export async function markNotificationRead(notificationId: string) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.markNotificationRead(notificationId);
-  }
-  dataStore.markNotificationRead(notificationId);
-  return true;
+  requireSupabase();
+  return supabaseHR.markNotificationRead(notificationId);
 }
 
 // ============================================
@@ -281,10 +253,118 @@ export async function markNotificationRead(notificationId: string) {
 // ============================================
 
 export async function searchPolicies(query: string) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.searchPolicies(query);
-  }
-  return dataStore.searchPolicies(query);
+  requireSupabase();
+  return supabaseHR.searchPolicies(query);
+}
+
+export async function getPolicies() {
+  requireSupabase();
+  return supabaseHR.searchPolicies('');
+}
+
+export async function createPolicy(input: {
+  title: string;
+  category: string;
+  content: string;
+  lastUpdated?: string;
+}) {
+  requireSupabase();
+  return supabaseHR.createPolicy(input);
+}
+
+export async function updatePolicy(
+  id: string,
+  updates: Partial<{ title: string; category: string; content: string; lastUpdated: string }>
+) {
+  requireSupabase();
+  return supabaseHR.updatePolicy(id, updates);
+}
+
+export async function deletePolicy(id: string) {
+  requireSupabase();
+  return supabaseHR.deletePolicy(id);
+}
+
+// ============================================
+// ANNOUNCEMENTS
+// ============================================
+
+export async function getAnnouncements(role?: string) {
+  requireSupabase();
+  return supabaseHR.getAnnouncements(role);
+}
+
+export async function createAnnouncement(input: {
+  title: string;
+  content: string;
+  audienceRole: 'all' | 'employee' | 'manager' | 'hr';
+  pinned?: boolean;
+  createdBy?: string | null;
+  expiresAt?: string | null;
+}) {
+  requireSupabase();
+  return supabaseHR.createAnnouncement(input);
+}
+
+export async function updateAnnouncement(
+  id: string,
+  updates: Partial<{
+    title: string;
+    content: string;
+    audienceRole: 'all' | 'employee' | 'manager' | 'hr';
+    pinned: boolean;
+    expiresAt: string | null;
+  }>
+) {
+  requireSupabase();
+  return supabaseHR.updateAnnouncement(id, updates);
+}
+
+export async function deleteAnnouncement(id: string) {
+  requireSupabase();
+  return supabaseHR.deleteAnnouncement(id);
+}
+
+// ============================================
+// DOCUMENTS & ACKNOWLEDGMENTS
+// ============================================
+
+export async function getDocuments(role?: string) {
+  requireSupabase();
+  return supabaseHR.getDocuments(role);
+}
+
+export async function getDocumentById(id: string) {
+  requireSupabase();
+  return supabaseHR.getDocumentById(id);
+}
+
+export async function createDocument(input: {
+  title: string;
+  description?: string | null;
+  filePath: string;
+  audienceRole: 'all' | 'employee' | 'manager' | 'hr';
+  requiresAck?: boolean;
+  createdBy?: string | null;
+  expiresAt?: string | null;
+}) {
+  requireSupabase();
+  return supabaseHR.createDocument(input);
+}
+
+export async function deleteDocument(id: string) {
+  requireSupabase();
+  return supabaseHR.deleteDocument(id);
+}
+
+export async function acknowledgeDocument(employeeId: string, documentId: string) {
+  requireSupabase();
+  return supabaseHR.acknowledgeDocument(employeeId, documentId);
+}
+
+export async function getAcknowledgedDocumentIds(employeeId: string) {
+  requireSupabase();
+  return supabaseHR.getAcknowledgedDocumentIds(employeeId);
 }
 
 // ============================================
@@ -292,10 +372,13 @@ export async function searchPolicies(query: string) {
 // ============================================
 
 export async function getSystemMetrics() {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.getSystemMetrics();
-  }
-  return dataStore.getSystemMetrics();
+  requireSupabase();
+  const metrics = await supabaseHR.getSystemMetrics();
+  return {
+    ...metrics,
+    complianceScore: 0,
+    escalations: 0,
+  };
 }
 
 // ============================================
@@ -303,70 +386,67 @@ export async function getSystemMetrics() {
 // ============================================
 
 export async function getAllPendingApprovals(managerId: string) {
-  if (isSupabaseConfigured()) {
-    const [leaveRequests, regularizationRequests] = await Promise.all([
-      supabaseHR.getPendingLeaveRequests(managerId),
-      supabaseHR.getRegularizationRequests(),
-    ]);
-    
-    // Get direct reports to filter regularization requests
-    const directReports = await supabaseHR.getDirectReports(managerId);
-    const reportIds = directReports.map(e => e.id);
-    
-    const pendingReg = regularizationRequests.filter(
-      r => r.status === 'pending' && reportIds.includes(r.employee_id)
-    );
-    
-    const approvals: Array<{
-      id: string;
-      type: 'leave' | 'regularization';
-      employeeId: string;
-      employeeName: string;
-      department: string;
-      title: string;
-      details: string;
-      submittedAt: string;
-      priority: 'normal' | 'urgent';
-    }> = [];
-    
-    // Add leave requests
-    for (const req of leaveRequests) {
-      const emp = req.employee;
-      approvals.push({
-        id: req.id,
-        type: 'leave',
-        employeeId: req.employee_id,
-        employeeName: emp?.name || 'Unknown',
-        department: emp?.department || 'Unknown',
-        title: `${req.leave_type} Leave - ${req.days_requested} day(s)`,
-        details: `${req.start_date} to ${req.end_date}: ${req.reason}`,
-        submittedAt: req.submitted_at,
-        priority: 'normal',
-      });
-    }
-    
-    // Add regularization requests
-    for (const req of pendingReg) {
-      const emp = directReports.find(e => e.id === req.employee_id);
-      approvals.push({
-        id: req.id,
-        type: 'regularization',
-        employeeId: req.employee_id,
-        employeeName: emp?.name || 'Unknown',
-        department: emp?.department || 'Unknown',
-        title: `${req.request_type.replace('_', ' ')} - ${req.date}`,
-        details: req.reason,
-        submittedAt: req.submitted_at,
-        priority: 'normal',
-      });
-    }
-    
-    return approvals.sort((a, b) => 
-      new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
-    );
+  requireSupabase();
+  const [leaveRequests, regularizationRequests] = await Promise.all([
+    supabaseHR.getPendingLeaveRequests(managerId),
+    supabaseHR.getRegularizationRequests(),
+  ]);
+  
+  // Get direct reports to filter regularization requests
+  const directReports = await supabaseHR.getDirectReports(managerId);
+  const reportIds = directReports.map(e => e.id);
+  
+  const pendingReg = regularizationRequests.filter(
+    r => r.status === 'pending' && reportIds.includes(r.employee_id)
+  );
+  
+  const approvals: Array<{
+    id: string;
+    type: 'leave' | 'regularization';
+    employeeId: string;
+    employeeName: string;
+    department: string;
+    title: string;
+    details: string;
+    submittedAt: string;
+    priority: 'normal' | 'urgent';
+  }> = [];
+  
+  // Add leave requests
+  for (const req of leaveRequests) {
+    const emp = req.employee;
+    approvals.push({
+      id: req.id,
+      type: 'leave',
+      employeeId: req.employee_id,
+      employeeName: emp?.name || 'Unknown',
+      department: emp?.department || 'Unknown',
+      title: `${req.leave_type} Leave - ${req.days_requested} day(s)`,
+      details: `${req.start_date} to ${req.end_date}: ${req.reason}`,
+      submittedAt: req.submitted_at,
+      priority: 'normal',
+    });
   }
   
-  return dataStore.getAllPendingApprovals(managerId);
+  // Add regularization requests
+  for (const req of pendingReg) {
+    const emp = directReports.find(e => e.id === req.employee_id);
+    approvals.push({
+      id: req.id,
+      type: 'regularization',
+      employeeId: req.employee_id,
+      employeeName: emp?.name || 'Unknown',
+      department: emp?.department || 'Unknown',
+      title: `${req.request_type.replace('_', ' ')} - ${req.date}`,
+      details: req.reason,
+      submittedAt: req.submitted_at,
+      priority: 'normal',
+    });
+  }
+  
+  return approvals.sort((a, b) => 
+    new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+  );
 }
 
 // ============================================
@@ -382,12 +462,10 @@ export function subscribeToLeaveRequests(
   return null;
 }
 
-export function subscribeToNotifications(
+export async function subscribeToNotifications(
   employeeId: string,
   callback: (notification: unknown) => void
 ) {
-  if (isSupabaseConfigured()) {
-    return supabaseHR.subscribeToNotifications(employeeId, callback);
-  }
-  return null;
+  requireSupabase();
+  return supabaseHR.subscribeToNotifications(employeeId, callback);
 }

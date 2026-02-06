@@ -16,6 +16,7 @@ import {
 import { Clock, Send, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useHRActions } from "@/hooks";
+import { useCurrentUser } from "@/contexts/PersonaContext";
 
 interface RegularizationFormProps {
   employeeId?: string;
@@ -29,7 +30,7 @@ interface RegularizationFormProps {
 }
 
 export function RegularizationForm({ 
-  employeeId = "emp-001",
+  employeeId,
   onSubmit, 
   onCancel 
 }: RegularizationFormProps) {
@@ -39,6 +40,9 @@ export function RegularizationForm({
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{ requestId: string } | null>(null);
+
+  const currentUser = useCurrentUser();
+  const resolvedEmployeeId = employeeId || currentUser.employeeId;
 
   // Use direct HR actions hook
   const { submitRegularization, isLoading } = useHRActions();
@@ -79,7 +83,7 @@ export function RegularizationForm({
         
         // Direct tool call - no chat message needed!
         const result = await submitRegularization({
-          employeeId,
+          employeeId: resolvedEmployeeId,
           date,
           requestType,
           requestedTime: actualTime,

@@ -22,6 +22,7 @@ import {
   getLeaveBalance,
   getAttendanceStatus,
 } from "@/services/hr-api-client";
+import { useCurrentUser } from "@/contexts/PersonaContext";
 
 // ============================================
 // TYPES
@@ -58,8 +59,16 @@ export interface UseHRActionsReturn {
   }) => Promise<ActionResult<{ requestId: string }>>;
   
   // Manager Actions
-  approveRequest: (approvalId: string, comment?: string) => Promise<ActionResult>;
-  rejectRequest: (approvalId: string, comment?: string) => Promise<ActionResult>;
+  approveRequest: (
+    approvalId: string,
+    approvalType: "leave" | "regularization" | "wfh",
+    comment?: string
+  ) => Promise<ActionResult>;
+  rejectRequest: (
+    approvalId: string,
+    approvalType: "leave" | "regularization" | "wfh",
+    comment?: string
+  ) => Promise<ActionResult>;
   
   // Data Fetching
   refreshLeaveBalance: (employeeId: string) => Promise<ActionResult>;
@@ -77,6 +86,7 @@ export interface UseHRActionsReturn {
 export function useHRActions(): UseHRActionsReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);
+  const currentUser = useCurrentUser();
 
   // ============================================
   // ATTENDANCE ACTIONS
@@ -186,11 +196,21 @@ export function useHRActions(): UseHRActionsReturn {
   // MANAGER ACTIONS
   // ============================================
 
-  const approveRequest = useCallback(async (approvalId: string, comment?: string): Promise<ActionResult> => {
+  const approveRequest = useCallback(async (
+    approvalId: string,
+    approvalType: "leave" | "regularization" | "wfh",
+    comment?: string
+  ): Promise<ActionResult> => {
     setIsLoading(true);
     setLastAction("approve");
     try {
-      const result = await processApproval({ approvalId, action: "approve", comment });
+      const result = await processApproval({
+        approvalId,
+        action: "approve",
+        comment,
+        type: approvalType,
+        managerId: currentUser.employeeId,
+      });
       return {
         success: result.success,
         message: result.message,
@@ -205,11 +225,21 @@ export function useHRActions(): UseHRActionsReturn {
     }
   }, []);
 
-  const rejectRequest = useCallback(async (approvalId: string, comment?: string): Promise<ActionResult> => {
+  const rejectRequest = useCallback(async (
+    approvalId: string,
+    approvalType: "leave" | "regularization" | "wfh",
+    comment?: string
+  ): Promise<ActionResult> => {
     setIsLoading(true);
     setLastAction("reject");
     try {
-      const result = await processApproval({ approvalId, action: "reject", comment });
+      const result = await processApproval({
+        approvalId,
+        action: "reject",
+        comment,
+        type: approvalType,
+        managerId: currentUser.employeeId,
+      });
       return {
         success: result.success,
         message: result.message,

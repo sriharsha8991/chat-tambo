@@ -70,7 +70,7 @@ export function ApprovalQueue({
     
     try {
       // Direct tool call - no chat message needed!
-      const result = await approveRequest(approval.id);
+      const result = await approveRequest(approval.id, approval.type);
       
       if (result.success) {
         setMessage({ type: "success", text: `✓ Approved ${approval.employeeName}'s ${approval.type} request` });
@@ -98,7 +98,7 @@ export function ApprovalQueue({
     
     try {
       // Direct tool call - no chat message needed!
-      const result = await rejectRequest(approval.id);
+      const result = await rejectRequest(approval.id, approval.type);
       
       if (result.success) {
         setMessage({ type: "success", text: `✓ Rejected ${approval.employeeName}'s ${approval.type} request` });
@@ -200,7 +200,7 @@ export function ApprovalQueue({
 
               return (
                 <div
-                  key={approval.id}
+                  key={`${approval.type}-${approval.id}`}
                   className={cn(
                     "rounded-lg border p-3 transition-colors hover:bg-muted/50",
                     approval.priority === "urgent" && "border-red-200 bg-red-50/50"

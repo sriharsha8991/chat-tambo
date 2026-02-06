@@ -7,6 +7,7 @@ import { Clock, LogIn, LogOut, CheckCircle2, AlertCircle, Loader2 } from "lucide
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useHRActions } from "@/hooks";
+import { useCurrentUser } from "@/contexts/PersonaContext";
 
 interface CheckInOutCardProps {
   checkInTime?: string;
@@ -24,7 +25,7 @@ export function CheckInOutCard({
   checkOutTime: initialCheckOutTime,
   status: initialStatus = "not_checked_in",
   totalHours: initialTotalHours,
-  employeeId = "emp-001", // Default for demo
+  employeeId,
   onCheckIn,
   onCheckOut,
   isLoading = false,
@@ -37,6 +38,9 @@ export function CheckInOutCard({
   
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   
+  const currentUser = useCurrentUser();
+  const resolvedEmployeeId = employeeId || currentUser.employeeId;
+
   // Use direct HR actions hook
   const { checkIn, checkOut, isLoading: actionLoading } = useHRActions();
 
@@ -58,7 +62,7 @@ export function CheckInOutCard({
     }
     
     // Direct tool call - no chat message needed!
-    const result = await checkIn(employeeId);
+    const result = await checkIn(resolvedEmployeeId);
     
     if (result.success && result.data) {
       // Update local state immediately
@@ -92,7 +96,7 @@ export function CheckInOutCard({
     }
     
     // Direct tool call - no chat message needed!
-    const result = await checkOut(employeeId);
+    const result = await checkOut(resolvedEmployeeId);
     
     if (result.success && result.data) {
       // Update local state immediately

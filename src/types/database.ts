@@ -21,10 +21,11 @@ export type Database = {
           name: string;
           email: string;
           role: "employee" | "manager" | "hr";
-          department: string | null;
+          department: string;
           manager_id: string | null;
-          avatar_url: string | null;
+          join_date: string;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -32,10 +33,11 @@ export type Database = {
           name: string;
           email: string;
           role: "employee" | "manager" | "hr";
-          department?: string | null;
+          department: string;
           manager_id?: string | null;
-          avatar_url?: string | null;
+          join_date: string;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -43,10 +45,11 @@ export type Database = {
           name?: string;
           email?: string;
           role?: "employee" | "manager" | "hr";
-          department?: string | null;
+          department?: string;
           manager_id?: string | null;
-          avatar_url?: string | null;
+          join_date?: string;
           created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -57,9 +60,10 @@ export type Database = {
           date: string;
           check_in: string | null;
           check_out: string | null;
-          status: "present" | "absent" | "half_day" | "wfh" | "holiday" | null;
-          source: string;
+          status: "present" | "absent" | "wfh" | "on_leave" | "half_day" | "holiday";
+          hours_worked: number | null;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -67,9 +71,10 @@ export type Database = {
           date: string;
           check_in?: string | null;
           check_out?: string | null;
-          status?: "present" | "absent" | "half_day" | "wfh" | "holiday" | null;
-          source?: string;
+          status?: "present" | "absent" | "wfh" | "on_leave" | "half_day" | "holiday";
+          hours_worked?: number | null;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -77,9 +82,10 @@ export type Database = {
           date?: string;
           check_in?: string | null;
           check_out?: string | null;
-          status?: "present" | "absent" | "half_day" | "wfh" | "holiday" | null;
-          source?: string;
+          status?: "present" | "absent" | "wfh" | "on_leave" | "half_day" | "holiday";
+          hours_worked?: number | null;
           created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -139,6 +145,8 @@ export type Database = {
           total_days: number;
           used_days: number;
           year: number;
+          created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -147,6 +155,8 @@ export type Database = {
           total_days: number;
           used_days?: number;
           year?: number;
+          created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -155,6 +165,8 @@ export type Database = {
           total_days?: number;
           used_days?: number;
           year?: number;
+          created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -213,52 +225,148 @@ export type Database = {
         Row: {
           id: string;
           title: string;
-          category: string | null;
+          category: string;
           content: string;
+          last_updated: string;
           created_at: string;
         };
         Insert: {
           id?: string;
           title: string;
-          category?: string | null;
+          category: string;
           content: string;
+          last_updated?: string;
           created_at?: string;
         };
         Update: {
           id?: string;
           title?: string;
-          category?: string | null;
+          category?: string;
           content?: string;
+          last_updated?: string;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      announcements: {
+        Row: {
+          id: string;
+          title: string;
+          content: string;
+          audience_role: string;
+          pinned: boolean;
+          created_by: string | null;
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          content: string;
+          audience_role: string;
+          pinned?: boolean;
+          created_by?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          content?: string;
+          audience_role?: string;
+          pinned?: boolean;
+          created_by?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      documents: {
+        Row: {
+          id: string;
+          title: string;
+          description: string | null;
+          file_path: string;
+          audience_role: string;
+          requires_ack: boolean;
+          created_by: string | null;
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string | null;
+          file_path: string;
+          audience_role: string;
+          requires_ack?: boolean;
+          created_by?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          description?: string | null;
+          file_path?: string;
+          audience_role?: string;
+          requires_ack?: boolean;
+          created_by?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      document_acknowledgments: {
+        Row: {
+          id: string;
+          document_id: string;
+          employee_id: string;
+          acknowledged_at: string;
+        };
+        Insert: {
+          id?: string;
+          document_id: string;
+          employee_id: string;
+          acknowledged_at?: string;
+        };
+        Update: {
+          id?: string;
+          document_id?: string;
+          employee_id?: string;
+          acknowledged_at?: string;
         };
         Relationships: [];
       };
       notifications: {
         Row: {
           id: string;
-          user_id: string;
+          employee_id: string;
           type: string;
           title: string;
-          message: string | null;
-          read: boolean;
+          message: string;
+          related_id: string | null;
+          is_read: boolean;
           created_at: string;
         };
         Insert: {
           id?: string;
-          user_id: string;
+          employee_id: string;
           type: string;
           title: string;
-          message?: string | null;
-          read?: boolean;
+          message: string;
+          related_id?: string | null;
+          is_read?: boolean;
           created_at?: string;
         };
         Update: {
           id?: string;
-          user_id?: string;
+          employee_id?: string;
           type?: string;
           title?: string;
-          message?: string | null;
-          read?: boolean;
+          message?: string;
+          related_id?: string | null;
+          is_read?: boolean;
           created_at?: string;
         };
         Relationships: [];
@@ -279,3 +387,6 @@ export type LeaveBalance = Database["public"]["Tables"]["leave_balances"]["Row"]
 export type LeaveRequest = Database["public"]["Tables"]["leave_requests"]["Row"];
 export type Policy = Database["public"]["Tables"]["policies"]["Row"];
 export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
+export type Announcement = Database["public"]["Tables"]["announcements"]["Row"];
+export type Document = Database["public"]["Tables"]["documents"]["Row"];
+export type DocumentAcknowledgment = Database["public"]["Tables"]["document_acknowledgments"]["Row"];

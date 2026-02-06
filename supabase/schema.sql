@@ -118,6 +118,46 @@ CREATE TABLE policies (
 );
 
 -- ============================================
+-- ANNOUNCEMENTS TABLE
+-- ============================================
+CREATE TABLE announcements (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title VARCHAR(200) NOT NULL,
+  content TEXT NOT NULL,
+  audience_role VARCHAR(20) NOT NULL CHECK (audience_role IN ('all', 'employee', 'manager', 'hr')),
+  pinned BOOLEAN DEFAULT FALSE,
+  created_by UUID REFERENCES employees(id) ON DELETE SET NULL,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- DOCUMENTS TABLE
+-- ============================================
+CREATE TABLE documents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  file_path TEXT NOT NULL,
+  audience_role VARCHAR(20) NOT NULL CHECK (audience_role IN ('all', 'employee', 'manager', 'hr')),
+  requires_ack BOOLEAN DEFAULT FALSE,
+  created_by UUID REFERENCES employees(id) ON DELETE SET NULL,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- DOCUMENT ACKNOWLEDGMENTS TABLE
+-- ============================================
+CREATE TABLE document_acknowledgments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  acknowledged_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(document_id, employee_id)
+);
+
+-- ============================================
 -- INDEXES FOR PERFORMANCE
 -- ============================================
 CREATE INDEX idx_employees_manager ON employees(manager_id);
@@ -130,6 +170,12 @@ CREATE INDEX idx_regularization_employee ON regularization_requests(employee_id)
 CREATE INDEX idx_regularization_status ON regularization_requests(status);
 CREATE INDEX idx_notifications_employee ON notifications(employee_id);
 CREATE INDEX idx_notifications_read ON notifications(is_read);
+CREATE INDEX idx_announcements_audience ON announcements(audience_role);
+CREATE INDEX idx_announcements_created ON announcements(created_at);
+CREATE INDEX idx_documents_audience ON documents(audience_role);
+CREATE INDEX idx_documents_created ON documents(created_at);
+CREATE INDEX idx_doc_ack_employee ON document_acknowledgments(employee_id);
+CREATE INDEX idx_doc_ack_document ON document_acknowledgments(document_id);
 
 -- ============================================
 -- FUNCTIONS & TRIGGERS
@@ -161,6 +207,9 @@ ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE regularization_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_acknowledgments ENABLE ROW LEVEL SECURITY;
 
 -- For development, allow all access (update these for production)
 CREATE POLICY "Allow all for employees" ON employees FOR ALL USING (true);
@@ -170,6 +219,9 @@ CREATE POLICY "Allow all for attendance" ON attendance FOR ALL USING (true);
 CREATE POLICY "Allow all for regularization_requests" ON regularization_requests FOR ALL USING (true);
 CREATE POLICY "Allow all for notifications" ON notifications FOR ALL USING (true);
 CREATE POLICY "Allow all for policies" ON policies FOR ALL USING (true);
+CREATE POLICY "Allow all for announcements" ON announcements FOR ALL USING (true);
+CREATE POLICY "Allow all for documents" ON documents FOR ALL USING (true);
+CREATE POLICY "Allow all for document_acknowledgments" ON document_acknowledgments FOR ALL USING (true);
 
 -- ============================================
 -- ENABLE REALTIME
@@ -178,3 +230,6 @@ ALTER PUBLICATION supabase_realtime ADD TABLE leave_requests;
 ALTER PUBLICATION supabase_realtime ADD TABLE regularization_requests;
 ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
 ALTER PUBLICATION supabase_realtime ADD TABLE attendance;
+ALTER PUBLICATION supabase_realtime ADD TABLE announcements;
+ALTER PUBLICATION supabase_realtime ADD TABLE documents;
+ALTER PUBLICATION supabase_realtime ADD TABLE document_acknowledgments;

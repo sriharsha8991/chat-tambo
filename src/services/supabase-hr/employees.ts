@@ -1,4 +1,5 @@
 import { getDb, isSupabaseConfigured, Employee } from './base';
+import { resolveEmployeeUuid } from './utils';
 
 export async function getEmployee(employeeId: string): Promise<Employee | null> {
   if (!isSupabaseConfigured()) return null;
@@ -39,12 +40,7 @@ export async function getEmployeeByEmployeeId(employeeId: string): Promise<Emplo
 export async function getDirectReports(managerId: string): Promise<Employee[]> {
   if (!isSupabaseConfigured()) return [];
 
-  // First, resolve managerId to UUID if it's an employee_id
-  let managerUuid = managerId;
-  if (!managerId.includes('-') || managerId.startsWith('ZP-')) {
-    const manager = await getEmployeeByEmployeeId(managerId);
-    if (manager) managerUuid = manager.id;
-  }
+  const managerUuid = await resolveEmployeeUuid(managerId);
 
   const { data, error } = await getDb()
     .from('employees')

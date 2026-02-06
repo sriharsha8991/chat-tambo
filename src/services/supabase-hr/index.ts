@@ -4,6 +4,8 @@ export * from './leave-balances';
 export * from './leave-requests';
 export * from './metrics';
 export * from './notifications';
+export * from './announcements';
+export * from './documents';
 export * from './policies';
 export * from './regularizations';
 export * from './subscriptions';

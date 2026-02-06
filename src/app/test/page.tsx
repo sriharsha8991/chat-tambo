@@ -6,7 +6,7 @@
  * without needing Tambo API authentication
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PersonaProvider, usePersona } from "@/contexts/PersonaContext";
 import type { PersonaRole } from "@/types/hr";
 import {
@@ -21,72 +21,83 @@ import {
   PolicyViewer,
 } from "@/components/hr";
 
-// Mock data for testing components
-const mockLeaveBalances = [
-  { leaveType: "casual", totalDays: 12, usedDays: 3, remainingDays: 9, label: "Casual Leave" },
-  { leaveType: "sick", totalDays: 10, usedDays: 2, remainingDays: 8, label: "Sick Leave" },
-  { leaveType: "earned", totalDays: 15, usedDays: 5, remainingDays: 10, label: "Earned Leave" },
-  { leaveType: "wfh", totalDays: 24, usedDays: 8, remainingDays: 16, label: "Work From Home" },
-];
-
-const mockRequests = [
-  { id: "1", type: "leave" as const, title: "Casual Leave - 2 days", status: "pending" as const, details: "Family function", submittedAt: "2024-01-15" },
-  { id: "2", type: "regularization" as const, title: "Missed checkout - Jan 10", status: "approved" as const, details: "Forgot to check out", submittedAt: "2024-01-11" },
-  { id: "3", type: "wfh" as const, title: "WFH Request - Jan 20", status: "rejected" as const, details: "Internet issues", submittedAt: "2024-01-18" },
-];
-
-const mockAttendanceRecords = [
-  { date: "2024-01-15", checkIn: "09:15", checkOut: "18:30", totalHours: "9h 15m", status: "present" as const },
-  { date: "2024-01-14", checkIn: "09:00", checkOut: "18:00", totalHours: "9h 00m", status: "present" as const },
-  { date: "2024-01-13", status: "holiday" as const, notes: "Makar Sankranti" },
-  { date: "2024-01-12", checkIn: "10:00", checkOut: "16:00", totalHours: "6h 00m", status: "half_day" as const },
-  { date: "2024-01-11", status: "wfh" as const, checkIn: "09:30", checkOut: "19:00", totalHours: "9h 30m" },
-];
-
-const mockApprovals = [
-  { id: "1", type: "leave" as const, employeeId: "E001", employeeName: "Priya Sharma", department: "Engineering", title: "Sick Leave - 1 day", details: "Not feeling well", submittedAt: "2024-01-15T10:00:00Z", priority: "urgent" as const },
-  { id: "2", type: "wfh" as const, employeeId: "E002", employeeName: "Amit Patel", department: "Engineering", title: "WFH Request - Jan 20", details: "Internet installation at home", submittedAt: "2024-01-14T14:30:00Z", priority: "normal" as const },
-  { id: "3", type: "regularization" as const, employeeId: "E003", employeeName: "Sneha Reddy", department: "Engineering", title: "Missed checkout correction", details: "Forgot to check out yesterday", submittedAt: "2024-01-15T09:00:00Z", priority: "normal" as const },
-];
-
-const mockTeamMembers = [
-  { id: "1", employeeId: "E001", name: "Priya Sharma", status: "available" as const, todayAttendance: { checkIn: "09:00" } },
-  { id: "2", employeeId: "E002", name: "Amit Patel", status: "wfh" as const, todayAttendance: { checkIn: "09:30" } },
-  { id: "3", employeeId: "E003", name: "Sneha Reddy", status: "on_leave" as const },
-  { id: "4", employeeId: "E004", name: "Vikram Singh", status: "available" as const, todayAttendance: { checkIn: "08:45" } },
-  { id: "5", employeeId: "E005", name: "Deepa Nair", status: "offline" as const },
-];
-
-const mockMetrics = {
-  totalEmployees: 150,
-  presentToday: 120,
-  onLeave: 15,
-  pendingApprovals: 23,
-  complianceScore: 94,
-  escalations: 2,
-};
-
-const mockPolicies = [
-  { id: "1", title: "Leave Policy", category: "Leave", content: "Employees are entitled to 12 casual leaves, 10 sick leaves, and 15 earned leaves per year...", lastUpdated: "2024-01-01" },
-  { id: "2", title: "Work From Home Guidelines", category: "WFH", content: "Employees may request up to 2 WFH days per week subject to manager approval...", lastUpdated: "2023-12-15" },
-  { id: "3", title: "Attendance Rules", category: "Attendance", content: "Core working hours are 10 AM to 6 PM. Employees must maintain minimum 8 hours per day...", lastUpdated: "2023-11-20" },
-];
+import {
+  getAttendanceStatus,
+  getLeaveBalance,
+  getRequestStatus,
+  getPendingApprovals,
+  getTeamMembers,
+  getSystemMetrics,
+  searchPolicies,
+} from "@/services/hr-api-client";
 
 const PERSONA_OPTIONS: { id: PersonaRole; label: string }[] = [
-  { id: "employee", label: "Priya (Employee)" },
-  { id: "manager", label: "Rajesh (Manager)" },
-  { id: "hr", label: "Ananya (HR Admin)" },
+  { id: "employee", label: "Employee" },
+  { id: "manager", label: "Manager" },
+  { id: "hr", label: "HR Admin" },
 ];
 
 function TestContent() {
   const { currentPersona, setPersona, currentUser } = usePersona();
   const [activeTab, setActiveTab] = useState<"employee" | "manager" | "hr">("employee");
+  const [leaveBalances, setLeaveBalances] = useState<Awaited<ReturnType<typeof getLeaveBalance>>>([]);
+  const [requests, setRequests] = useState<Awaited<ReturnType<typeof getRequestStatus>>>([]);
+  const [attendance, setAttendance] = useState<Awaited<ReturnType<typeof getAttendanceStatus>> | null>(null);
+  const [approvals, setApprovals] = useState<Awaited<ReturnType<typeof getPendingApprovals>>>([]);
+  const [teamMembers, setTeamMembers] = useState<Awaited<ReturnType<typeof getTeamMembers>>>([]);
+  const [metrics, setMetrics] = useState<Awaited<ReturnType<typeof getSystemMetrics>> | null>(null);
+  const [policies, setPolicies] = useState<Awaited<ReturnType<typeof searchPolicies>>>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const tabs = [
     { id: "employee", label: "Employee View", roles: ["employee", "manager", "hr_admin"] },
     { id: "manager", label: "Manager View", roles: ["manager", "hr_admin"] },
     { id: "hr", label: "HR Admin View", roles: ["hr_admin"] },
   ];
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!currentUser?.employeeId) return;
+      setIsLoading(true);
+
+      try {
+        if (activeTab === "employee") {
+          const [balances, reqs, att] = await Promise.all([
+            getLeaveBalance({ employeeId: currentUser.employeeId }),
+            getRequestStatus({ employeeId: currentUser.employeeId }),
+            getAttendanceStatus({ employeeId: currentUser.employeeId }),
+          ]);
+          setLeaveBalances(balances);
+          setRequests(reqs);
+          setAttendance(att);
+        }
+
+        if (activeTab === "manager") {
+          const [apprs, team] = await Promise.all([
+            getPendingApprovals({ managerId: currentUser.employeeId }),
+            getTeamMembers({ managerId: currentUser.employeeId }),
+          ]);
+          setApprovals(apprs);
+          setTeamMembers(team);
+        }
+
+        if (activeTab === "hr") {
+          const [systemMetrics, policyResults] = await Promise.all([
+            getSystemMetrics(),
+            searchPolicies({ query: "" }),
+          ]);
+          setMetrics(systemMetrics);
+          setPolicies(policyResults);
+        }
+      } catch (error) {
+        console.error("Failed to load test data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void loadData();
+  }, [activeTab, currentUser]);
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -157,26 +168,34 @@ function TestContent() {
               {/* Leave Balance Card */}
               <div className="bg-white rounded-lg shadow p-4">
                 <h3 className="text-sm font-medium text-gray-500 mb-3">LeaveBalanceCard</h3>
-                <LeaveBalanceCard balances={mockLeaveBalances} />
+                <LeaveBalanceCard balances={leaveBalances} />
               </div>
 
               {/* Request Status List */}
               <div className="bg-white rounded-lg shadow p-4">
                 <h3 className="text-sm font-medium text-gray-500 mb-3">RequestStatusList</h3>
-                <RequestStatusList requests={mockRequests} maxHeight={300} />
+                <RequestStatusList requests={requests} maxHeight={300} />
               </div>
             </div>
 
             {/* Attendance Timeline - Full Width */}
             <div className="bg-white rounded-lg shadow p-4">
               <h3 className="text-sm font-medium text-gray-500 mb-3">AttendanceTimeline</h3>
-              <AttendanceTimeline records={mockAttendanceRecords} />
+              <AttendanceTimeline
+                records={attendance?.records.map(r => ({
+                  date: r.date,
+                  checkIn: r.checkIn,
+                  checkOut: r.checkOut,
+                  totalHours: r.hoursWorked ? `${r.hoursWorked}h` : undefined,
+                  status: r.status as "present" | "absent" | "half_day" | "wfh" | "on_leave" | "holiday" | "regularization_pending",
+                })) || []}
+              />
             </div>
 
             {/* Leave Request Form */}
             <div className="bg-white rounded-lg shadow p-4 max-w-md">
               <h3 className="text-sm font-medium text-gray-500 mb-3">LeaveRequestForm</h3>
-              <LeaveRequestForm balances={mockLeaveBalances} />
+              <LeaveRequestForm balances={leaveBalances} />
             </div>
           </div>
         )}
@@ -189,13 +208,13 @@ function TestContent() {
               {/* Approval Queue */}
               <div className="bg-white rounded-lg shadow p-4">
                 <h3 className="text-sm font-medium text-gray-500 mb-3">ApprovalQueue</h3>
-                <ApprovalQueue approvals={mockApprovals} />
+                <ApprovalQueue approvals={approvals} />
               </div>
 
               {/* Team Overview */}
               <div className="bg-white rounded-lg shadow p-4">
                 <h3 className="text-sm font-medium text-gray-500 mb-3">TeamOverview</h3>
-                <TeamOverview members={mockTeamMembers} />
+                <TeamOverview members={teamMembers} />
               </div>
             </div>
           </div>
@@ -208,13 +227,19 @@ function TestContent() {
             {/* System Dashboard */}
             <div className="bg-white rounded-lg shadow p-4">
               <h3 className="text-sm font-medium text-gray-500 mb-3">SystemDashboard</h3>
-              <SystemDashboard metrics={mockMetrics} />
+              {metrics && <SystemDashboard metrics={metrics} />}
             </div>
 
             {/* Policy Viewer */}
             <div className="bg-white rounded-lg shadow p-4">
               <h3 className="text-sm font-medium text-gray-500 mb-3">PolicyViewer</h3>
-              <PolicyViewer policies={mockPolicies} />
+              <PolicyViewer
+                policies={policies}
+                onSearch={async (query) => {
+                  const results = await searchPolicies({ query });
+                  setPolicies(results);
+                }}
+              />
             </div>
           </div>
         )}

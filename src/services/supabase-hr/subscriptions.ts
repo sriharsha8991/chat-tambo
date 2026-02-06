@@ -1,4 +1,5 @@
 import { getDb, isSupabaseConfigured, LeaveRequest, NotificationRow } from './base';
+import { resolveEmployeeUuid } from './utils';
 
 export function subscribeToLeaveRequests(
   callback: (payload: { eventType: string; new: LeaveRequest | null; old: LeaveRequest | null }) => void
@@ -22,12 +23,13 @@ export function subscribeToLeaveRequests(
     .subscribe();
 }
 
-export function subscribeToNotifications(
+export async function subscribeToNotifications(
   employeeId: string,
   callback: (notification: NotificationRow) => void
 ) {
   if (!isSupabaseConfigured()) return null;
   const db = getDb();
+  const employeeUuid = await resolveEmployeeUuid(employeeId);
 
   return db
     .channel(`notifications_${employeeId}`)
@@ -37,7 +39,7 @@ export function subscribeToNotifications(
         event: 'INSERT',
         schema: 'public',
         table: 'notifications',
-        filter: `user_id=eq.${employeeId}`,
+        filter: `employee_id=eq.${employeeUuid}`,
       },
       (payload) => {
         callback(payload.new as NotificationRow);

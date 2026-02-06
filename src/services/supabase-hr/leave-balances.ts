@@ -18,14 +18,20 @@ export async function getLeaveBalances(employeeId: string): Promise<LeaveBalance
     .from('leave_balances')
     .select('*')
     .eq('employee_id', employeeUuid)
-    .eq('year', currentYear);
+    .order('year', { ascending: false });
 
   if (error) {
     console.error('Error fetching leave balances:', error);
     return [];
   }
 
-  return ((data as LeaveBalanceRow[]) || []).map(b => ({
+  const rows = (data as LeaveBalanceRow[]) || [];
+  const selectedYear = rows.some((row) => row.year === currentYear)
+    ? currentYear
+    : rows[0]?.year;
+  const filteredRows = selectedYear ? rows.filter((row) => row.year === selectedYear) : [];
+
+  return filteredRows.map(b => ({
     leave_type: b.leave_type,
     total_days: b.total_days,
     used_days: b.used_days,

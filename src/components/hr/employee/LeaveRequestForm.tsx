@@ -16,6 +16,7 @@ import {
 import { Calendar, Send, Info, CheckCircle2, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useHRActions } from "@/hooks";
+import { useCurrentUser } from "@/contexts/PersonaContext";
 
 interface LeaveBalance {
   leaveType: string;
@@ -41,7 +42,7 @@ interface LeaveRequestFormProps {
 export function LeaveRequestForm({
   balances = [],
   preselectedType,
-  employeeId = "emp-001", // Default for demo
+  employeeId,
   onSubmit,
   onCancel,
 }: LeaveRequestFormProps) {
@@ -51,6 +52,9 @@ export function LeaveRequestForm({
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{ requestId: string; daysRequested: number } | null>(null);
+
+  const currentUser = useCurrentUser();
+  const resolvedEmployeeId = employeeId || currentUser.employeeId;
 
   // Use direct HR actions hook
   const { applyLeave, isLoading } = useHRActions();
@@ -105,7 +109,7 @@ export function LeaveRequestForm({
       } else {
         // Direct tool call - no chat message needed!
         const result = await applyLeave({
-          employeeId,
+          employeeId: resolvedEmployeeId,
           leaveType,
           startDate,
           endDate,

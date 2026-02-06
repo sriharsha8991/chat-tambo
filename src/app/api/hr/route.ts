@@ -7,7 +7,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { unlink } from "fs/promises";
+import path from "path";
 import * as hrService from "@/services/hr-unified";
+
+export const runtime = "nodejs";
 
 // ============================================
 // GET: Read operations
@@ -42,15 +46,18 @@ export async function GET(request: NextRequest) {
       case "getAllEmployees":
         return NextResponse.json(await hrService.getAllEmployees());
 
+      case "getTeamMembers":
+        if (!managerId) {
+          return NextResponse.json({ error: "managerId required" }, { status: 400 });
+        }
+        return NextResponse.json(await hrService.getTeamMembers(managerId));
+
       case "getLeaveBalances":
         if (!employeeId) {
           return NextResponse.json({ error: "employeeId required" }, { status: 400 });
         }
         const leaveBalances = await hrService.getLeaveBalances(employeeId);
-        if (!leaveBalances || leaveBalances.length === 0) {
-          return NextResponse.json({ error: `Leave balances not found for employee: ${employeeId}` }, { status: 404 });
-        }
-        return NextResponse.json(leaveBalances);
+        return NextResponse.json(leaveBalances || []);
 
       case "getAttendanceRecords":
         if (!employeeId) {
@@ -84,6 +91,34 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: "employeeId required" }, { status: 400 });
         }
         return NextResponse.json(await hrService.getNotifications(employeeId));
+
+      case "searchPolicies": {
+        const query = searchParams.get("query") || "";
+        if (!query.trim()) {
+          return NextResponse.json({ error: "query required" }, { status: 400 });
+        }
+        return NextResponse.json(await hrService.searchPolicies(query));
+      }
+
+      case "getPolicies":
+        return NextResponse.json(await hrService.getPolicies());
+
+      case "getAnnouncements": {
+        const role = searchParams.get("role") || undefined;
+        return NextResponse.json(await hrService.getAnnouncements(role));
+      }
+
+      case "getDocuments": {
+        const role = searchParams.get("role") || undefined;
+        return NextResponse.json(await hrService.getDocuments(role));
+      }
+
+      case "getAcknowledgedDocumentIds": {
+        if (!employeeId) {
+          return NextResponse.json({ error: "employeeId required" }, { status: 400 });
+        }
+        return NextResponse.json(await hrService.getAcknowledgedDocumentIds(employeeId));
+      }
 
       case "getSystemMetrics":
         return NextResponse.json(await hrService.getSystemMetrics());
@@ -196,6 +231,102 @@ export async function POST(request: NextRequest) {
         }
         await hrService.markNotificationRead(notificationId);
         return NextResponse.json({ success: true });
+      }
+
+      case "acknowledgeDocument": {
+        const { employeeId, documentId } = data;
+        if (!employeeId || !documentId) {
+          return NextResponse.json({ error: "employeeId and documentId required" }, { status: 400 });
+        }
+        const result = await hrService.acknowledgeDocument(employeeId, documentId);
+        return NextResponse.json(result || { error: "Unable to acknowledge document" });
+      }
+
+      case "createAnnouncement": {
+        const { announcement } = data;
+        if (!announcement) {
+          return NextResponse.json({ error: "announcement required" }, { status: 400 });
+        }
+        const result = await hrService.createAnnouncement(announcement);
+        return NextResponse.json(result || { error: "Unable to create announcement" });
+      }
+
+      case "updateAnnouncement": {
+        const { id, updates } = data;
+        if (!id || !updates) {
+          return NextResponse.json({ error: "id and updates required" }, { status: 400 });
+        }
+        const result = await hrService.updateAnnouncement(id, updates);
+        return NextResponse.json(result || { error: "Unable to update announcement" });
+      }
+
+      case "deleteAnnouncement": {
+        const { id } = data;
+        if (!id) {
+          return NextResponse.json({ error: "id required" }, { status: 400 });
+        }
+        const success = await hrService.deleteAnnouncement(id);
+        return NextResponse.json({ success });
+      }
+
+      case "createDocument": {
+        const { document } = data;
+        if (!document) {
+          return NextResponse.json({ error: "document required" }, { status: 400 });
+        }
+        const result = await hrService.createDocument(document);
+        return NextResponse.json(result || { error: "Unable to create document" });
+      }
+
+      case "deleteDocument": {
+        const { id } = data;
+        if (!id) {
+          return NextResponse.json({ error: "id required" }, { status: 400 });
+        }
+
+        const document = await hrService.getDocumentById(id);
+        if (!document) {
+          return NextResponse.json({ error: "Document not found" }, { status: 404 });
+        }
+
+        if (document.file_path && document.file_path.startsWith("/uploads/")) {
+          const filePath = path.join(process.cwd(), "public", document.file_path);
+          try {
+            await unlink(filePath);
+          } catch (error) {
+            console.error("Error deleting file:", error);
+          }
+        }
+
+        const success = await hrService.deleteDocument(id);
+        return NextResponse.json({ success });
+      }
+
+      case "createPolicy": {
+        const { policy } = data;
+        if (!policy) {
+          return NextResponse.json({ error: "policy required" }, { status: 400 });
+        }
+        const result = await hrService.createPolicy(policy);
+        return NextResponse.json(result || { error: "Unable to create policy" });
+      }
+
+      case "updatePolicy": {
+        const { id, updates } = data;
+        if (!id || !updates) {
+          return NextResponse.json({ error: "id and updates required" }, { status: 400 });
+        }
+        const result = await hrService.updatePolicy(id, updates);
+        return NextResponse.json(result || { error: "Unable to update policy" });
+      }
+
+      case "deletePolicy": {
+        const { id } = data;
+        if (!id) {
+          return NextResponse.json({ error: "id required" }, { status: 400 });
+        }
+        const success = await hrService.deletePolicy(id);
+        return NextResponse.json({ success });
       }
 
       case "updateLeaveBalance": {

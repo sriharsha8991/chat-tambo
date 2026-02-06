@@ -84,6 +84,27 @@ export interface PolicyDocument {
   lastUpdated: string;
 }
 
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  audienceRole: string;
+  pinned: boolean;
+  createdAt: string;
+  expiresAt?: string | null;
+}
+
+export interface DocumentItem {
+  id: string;
+  title: string;
+  description?: string | null;
+  filePath: string;
+  audienceRole: string;
+  requiresAck: boolean;
+  createdAt: string;
+  expiresAt?: string | null;
+}
+
 // User context for proactive rendering
 export interface UserContext {
   user: UserProfile;

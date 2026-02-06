@@ -82,6 +82,7 @@ export function ChatPage({ showSidebar = true }: ChatPageProps) {
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const tambo = useTambo();
+  const prevPersonaRef = React.useRef(currentPersona);
 
   // Get persona-specific suggestions
   const starterSuggestions = getSuggestionsForPersona(currentPersona);
@@ -91,6 +92,16 @@ export function ChatPage({ showSidebar = true }: ChatPageProps) {
 
   // Check if thread has messages
   const hasMessages = tambo?.thread?.messages && tambo.thread.messages.length > 0;
+
+  React.useEffect(() => {
+    if (prevPersonaRef.current !== currentPersona) {
+      prevPersonaRef.current = currentPersona;
+      if (tambo?.startNewThread) {
+        void tambo.startNewThread();
+      }
+      window.dispatchEvent(new CustomEvent("hr-data-updated"));
+    }
+  }, [currentPersona, tambo]);
 
   // Handle component click from sidebar
   const handleComponentClick = (componentName: string) => {

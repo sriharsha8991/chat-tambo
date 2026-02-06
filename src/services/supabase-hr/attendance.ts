@@ -64,6 +64,7 @@ export async function upsertAttendance(record: {
         check_in: record.checkIn,
         check_out: record.checkOut,
         status: normalizedStatus,
+        hours_worked: record.hoursWorked,
       },
       { onConflict: 'employee_id,date' }
     )

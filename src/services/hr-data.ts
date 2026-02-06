@@ -396,17 +396,21 @@ export async function processApproval(params: {
   action: "approve" | "reject";
   comment?: string;
   managerId?: string;
+  type?: "leave" | "regularization" | "wfh";
 }): Promise<{
   success: boolean;
   message: string;
 }> {
   await new Promise(resolve => setTimeout(resolve, 300));
   
-  const reviewerId = params.managerId || "mgr-001"; // Default to manager if not provided
+  if (!params.managerId) {
+    throw new Error("managerId is required to process approvals");
+  }
+  const reviewerId = params.managerId;
   
-  // Determine if it's a leave or regularization request by prefix
-  const isLeave = params.approvalId.startsWith("LV-");
-  const isReg = params.approvalId.startsWith("REG-");
+  const approvalType = params.type || (params.approvalId.startsWith("LV-") ? "leave" : "regularization");
+  const isLeave = approvalType === "leave" || approvalType === "wfh";
+  const isReg = approvalType === "regularization";
   
   if (isLeave) {
     if (params.action === "approve") {

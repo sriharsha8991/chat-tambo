@@ -118,7 +118,7 @@ export function ApprovalDetail({
           setIsProcessed(true);
         } else {
           // Direct tool call - no chat message needed!
-          const result = await approveRequest(approval.id, comment || undefined);
+          const result = await approveRequest(approval.id, approval.type, comment || undefined);
           if (result.success) {
             setMessage({ type: "success", text: `✓ ${approval.employeeName}'s ${type.label} approved!` });
             setIsProcessed(true);
@@ -133,7 +133,7 @@ export function ApprovalDetail({
           setIsProcessed(true);
         } else {
           // Direct tool call - no chat message needed!
-          const result = await rejectRequest(approval.id, comment || undefined);
+          const result = await rejectRequest(approval.id, approval.type, comment || undefined);
           if (result.success) {
             setMessage({ type: "success", text: `✓ ${approval.employeeName}'s ${type.label} rejected.` });
             setIsProcessed(true);

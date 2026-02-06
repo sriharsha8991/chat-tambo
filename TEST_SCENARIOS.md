@@ -16,6 +16,20 @@ This document contains 20 test scenarios covering all personas and features of t
 
 ---
 
+## Manual UI Rendering & Data Display Checklist (HR)
+
+- [ ] HR dashboard loads without spinner and shows metrics cards populated from Supabase.
+- [ ] Announcements Board renders existing announcements and pinned items appear first.
+- [ ] Posting a new announcement shows it in the board and in employee/manager feeds.
+- [ ] Document Center shows uploaded PDFs with correct title/description and open link.
+- [ ] Uploading a PDF adds a new document row without refresh.
+- [ ] Policy Manager lists policies and allows create/edit/delete with immediate UI updates.
+- [ ] Policy Viewer renders policies with correct category badges and last updated dates.
+- [ ] Empty states appear with the expected message when no announcements/documents/policies exist.
+- [ ] Loading states show skeletons while data is being fetched.
+
+---
+
 ## 🧑‍💼 EMPLOYEE PERSONA (Priya Sharma - ZP-1001)
 
 ### Test 1: Check Leave Balance

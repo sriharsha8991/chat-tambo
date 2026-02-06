@@ -133,6 +133,63 @@ export function useRealtimeHR(options: RealtimeHROptions = {}) {
 
     channelsRef.current.push(attendanceChannel);
 
+    // Channel for announcements
+    const announcementsChannel = supabase
+      .channel('announcements-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'announcements',
+        },
+        () => {
+          console.log('[Realtime HR] Announcements change');
+          handleDataChange();
+        }
+      )
+      .subscribe();
+
+    channelsRef.current.push(announcementsChannel);
+
+    // Channel for documents
+    const documentsChannel = supabase
+      .channel('documents-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'documents',
+        },
+        () => {
+          console.log('[Realtime HR] Documents change');
+          handleDataChange();
+        }
+      )
+      .subscribe();
+
+    channelsRef.current.push(documentsChannel);
+
+    // Channel for document acknowledgments
+    const acknowledgmentsChannel = supabase
+      .channel('document-ack-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'document_acknowledgments',
+        },
+        () => {
+          console.log('[Realtime HR] Document acknowledgments change');
+          handleDataChange();
+        }
+      )
+      .subscribe();
+
+    channelsRef.current.push(acknowledgmentsChannel);
+
     // Cleanup on unmount
     return () => {
       console.log('[Realtime HR] Cleaning up subscriptions');

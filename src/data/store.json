@@ -365,6 +365,15 @@
         "status": "present",
         "hoursWorked": null
       }
+    ],
+    "ZP-1001": [
+      {
+        "date": "2026-02-06",
+        "checkIn": "16:52:05",
+        "checkOut": null,
+        "status": "present",
+        "hoursWorked": null
+      }
     ]
   },
   "leaveRequests": [
@@ -437,6 +446,20 @@
       "reviewedBy": null,
       "reviewComment": null,
       "id": "LV-1770319190902"
+    },
+    {
+      "employeeId": "ZP-1001",
+      "leaveType": "earned",
+      "startDate": "2026-02-09",
+      "endDate": "2026-02-09",
+      "daysRequested": 1,
+      "reason": "emo",
+      "status": "pending",
+      "submittedAt": "2026-02-06T11:22:54.050Z",
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "reviewComment": null,
+      "id": "LV-1770376974051"
     }
   ],
   "regularizationRequests": [
@@ -497,10 +520,20 @@
       "id": "NOTIF-1770319190903",
       "read": false,
       "createdAt": "2026-02-05T19:19:50.903Z"
+    },
+    {
+      "employeeId": "mgr-001",
+      "type": "new_request",
+      "title": "New Leave Request",
+      "message": "Priya Sharma has requested 1 day(s) of earned leave from 2026-02-09 to 2026-02-09",
+      "relatedId": "LV-1770376974051",
+      "id": "NOTIF-1770376974052",
+      "read": false,
+      "createdAt": "2026-02-06T11:22:54.052Z"
     }
   ],
   "metadata": {
-    "lastUpdated": "2026-02-05T19:19:50.903Z",
+    "lastUpdated": "2026-02-06T11:22:54.052Z",
     "version": "1.0.0"
   }
 }

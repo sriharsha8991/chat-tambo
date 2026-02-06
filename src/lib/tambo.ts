@@ -19,6 +19,11 @@ import {
   ApprovalDetail,
   SystemDashboard,
   PolicyViewer,
+  AnnouncementsFeed,
+  DocumentsAcknowledgeList,
+  AnnouncementBoard,
+  DocumentCenter,
+  PolicyManager,
 } from "@/components/hr";
 import {
   getAttendanceStatus,
@@ -190,6 +195,7 @@ export const tools: TamboTool[] = [
     tool: processApproval,
     inputSchema: z.object({
       approvalId: z.string().describe("ID of the approval item"),
+      type: z.enum(["leave", "regularization", "wfh"]).optional().describe("Type of approval when known"),
       action: z.enum(["approve", "reject"]).describe("Whether to approve or reject"),
       comment: z.string().optional().describe("Optional comment for the decision"),
     }),
@@ -526,6 +532,143 @@ export const components: TamboComponent[] = [
         lastUpdated: z.string().describe("Last update date"),
       })).describe("Array of policies to display"),
       searchQuery: z.string().optional().describe("Pre-filled search query"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      density: z.enum(["compact", "comfortable"]).optional().describe("Visual density"),
+      showSearch: z.boolean().optional().describe("Show search input"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
+    }),
+  },
+  {
+    name: "AnnouncementsFeed",
+    description:
+      "A feed of HR announcements with pinned items. Use when users ask for latest HR updates.",
+    component: AnnouncementsFeed,
+    propsSchema: z.object({
+      announcements: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        content: z.string(),
+        audienceRole: z.string(),
+        pinned: z.boolean(),
+        createdAt: z.string(),
+        expiresAt: z.string().nullable().optional(),
+      })).describe("Announcements to display"),
+      title: z.string().optional().describe("Optional heading"),
+      maxHeight: z.number().optional().describe("Scroll container height"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      density: z.enum(["compact", "comfortable"]).optional().describe("Visual density"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
+    }),
+  },
+  {
+    name: "DocumentsAcknowledgeList",
+    description:
+      "A list of documents with optional acknowledgment actions. Use when showing required reads.",
+    component: DocumentsAcknowledgeList,
+    propsSchema: z.object({
+      documents: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        description: z.string().nullable().optional(),
+        filePath: z.string(),
+        audienceRole: z.string(),
+        requiresAck: z.boolean(),
+        createdAt: z.string(),
+        expiresAt: z.string().nullable().optional(),
+      })).describe("Documents to display"),
+      acknowledgedIds: z.array(z.string()).describe("Document IDs already acknowledged"),
+      title: z.string().optional().describe("Optional heading"),
+      maxHeight: z.number().optional().describe("Scroll container height"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      density: z.enum(["compact", "comfortable"]).optional().describe("Visual density"),
+      showAcknowledge: z.boolean().optional().describe("Show acknowledge buttons"),
+      hideAcknowledged: z.boolean().optional().describe("Hide acknowledged documents"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
+    }),
+  },
+  {
+    name: "AnnouncementBoard",
+    description:
+      "HR admin board for creating and managing announcements.",
+    component: AnnouncementBoard,
+    propsSchema: z.object({
+      announcements: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        content: z.string(),
+        audienceRole: z.string(),
+        pinned: z.boolean(),
+        createdAt: z.string(),
+      })).describe("Announcements to manage"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      canPost: z.boolean().optional().describe("Show announcement form"),
+      canDelete: z.boolean().optional().describe("Allow delete"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
+    }),
+  },
+  {
+    name: "DocumentCenter",
+    description:
+      "HR admin document center for uploading PDFs and managing document list.",
+    component: DocumentCenter,
+    propsSchema: z.object({
+      documents: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        description: z.string().nullable().optional(),
+        filePath: z.string(),
+        audienceRole: z.string(),
+        requiresAck: z.boolean(),
+        createdAt: z.string(),
+      })).describe("Documents to manage"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      canUpload: z.boolean().optional().describe("Show upload form"),
+      canDelete: z.boolean().optional().describe("Allow delete"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
+    }),
+  },
+  {
+    name: "PolicyManager",
+    description:
+      "HR admin policy manager for creating, editing, and deleting policies.",
+    component: PolicyManager,
+    propsSchema: z.object({
+      policies: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        category: z.string(),
+        content: z.string(),
+        lastUpdated: z.string(),
+      })).describe("Policies to manage"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      canCreate: z.boolean().optional().describe("Show create form"),
+      canEdit: z.boolean().optional().describe("Allow edit"),
+      canDelete: z.boolean().optional().describe("Allow delete"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
     }),
   },
 ];

@@ -46,6 +46,24 @@ async function post<T>(action: string, data: Record<string, unknown>): Promise<T
 }
 
 // ============================================
+// EMPLOYEE OPERATIONS
+// ============================================
+
+export async function getAllEmployees(): Promise<Array<{
+  id: string;
+  employee_id?: string;
+  employeeId?: string;
+  name: string;
+  email: string;
+  role: "employee" | "manager" | "hr";
+  department: string;
+  manager_id?: string | null;
+  managerId?: string | null;
+}>> {
+  return get("getAllEmployees", {});
+}
+
+// ============================================
 // ATTENDANCE OPERATIONS
 // ============================================
 
@@ -87,13 +105,24 @@ export async function submitCheckInOut(params: {
   // For check-out, get current attendance first
   const records = await get<Array<{
     date: string;
-    checkIn: string | null;
-    checkOut: string | null;
+    checkIn?: string | null;
+    checkOut?: string | null;
+    check_in?: string | null;
+    check_out?: string | null;
     status: string;
-    hoursWorked: number | null;
+    hoursWorked?: number | null;
+    hours_worked?: number | null;
   }>>("getAttendanceRecords", { employeeId: params.employeeId });
+
+  const normalizedRecords = records.map((record) => ({
+    date: record.date,
+    checkIn: record.checkIn ?? record.check_in ?? null,
+    checkOut: record.checkOut ?? record.check_out ?? null,
+    status: record.status,
+    hoursWorked: record.hoursWorked ?? record.hours_worked ?? null,
+  }));
   
-  const todayRecord = records.find(r => r.date === today);
+  const todayRecord = normalizedRecords.find(r => r.date === today);
   
   if (todayRecord?.checkIn) {
     const checkInTime = new Date(`${today}T${todayRecord.checkIn}`);
@@ -149,20 +178,31 @@ export async function getAttendanceStatus(params: {
 }> {
   const records = await get<Array<{
     date: string;
-    checkIn: string | null;
-    checkOut: string | null;
+    checkIn?: string | null;
+    checkOut?: string | null;
+    check_in?: string | null;
+    check_out?: string | null;
     status: string;
-    hoursWorked: number | null;
+    hoursWorked?: number | null;
+    hours_worked?: number | null;
   }>>("getAttendanceRecords", { employeeId: params.employeeId });
+
+  const normalizedRecords = records.map((record) => ({
+    date: record.date,
+    checkIn: record.checkIn ?? record.check_in ?? null,
+    checkOut: record.checkOut ?? record.check_out ?? null,
+    status: record.status,
+    hoursWorked: record.hoursWorked ?? record.hours_worked ?? null,
+  }));
   
   const today = new Date().toISOString().split("T")[0];
-  const todayRecord = records.find(r => r.date === today);
-  const missedCheckout = records.find(r => r.checkIn && !r.checkOut && r.date !== today);
+  const todayRecord = normalizedRecords.find((r) => r.date === today);
+  const missedCheckout = normalizedRecords.find((r) => r.checkIn && !r.checkOut && r.date !== today);
   
-  const presentDays = records.filter(r => r.status === "present").length;
+  const presentDays = normalizedRecords.filter((r) => r.status === "present").length;
   
   return {
-    records: records.map(r => ({
+    records: normalizedRecords.map((r) => ({
       id: `att-${params.employeeId}-${r.date}`,
       date: r.date,
       checkIn: r.checkIn || undefined,
@@ -171,11 +211,11 @@ export async function getAttendanceStatus(params: {
       hoursWorked: r.hoursWorked || undefined,
     })),
     summary: {
-      totalDays: records.length,
+      totalDays: normalizedRecords.length,
       presentDays,
-      absentDays: records.filter(r => r.status === "absent").length,
-      wfhDays: records.filter(r => r.status === "wfh").length,
-      avgHoursWorked: records.reduce((a, b) => a + (b.hoursWorked || 0), 0) / (presentDays || 1),
+      absentDays: normalizedRecords.filter((r) => r.status === "absent").length,
+      wfhDays: normalizedRecords.filter((r) => r.status === "wfh").length,
+      avgHoursWorked: normalizedRecords.reduce((total, record) => total + (record.hoursWorked || 0), 0) / (presentDays || 1),
     },
     todayStatus: {
       isCheckedIn: !!todayRecord?.checkIn,
@@ -200,16 +240,13 @@ export async function getLeaveBalance(params: {
   remainingDays: number;
   label: string;
 }>> {
-  const balances = await get<{
-    casual: { total: number; used: number };
-    sick: { total: number; used: number };
-    earned: { total: number; used: number };
-    wfh: { total: number; used: number };
-    comp_off: { total: number; used: number };
-  } | null>("getLeaveBalances", { employeeId: params.employeeId });
-  
-  if (!balances) return [];
-  
+  const balances = await get<Array<{
+    leave_type: string;
+    total_days: number;
+    used_days: number;
+    remaining_days: number;
+  }>>("getLeaveBalances", { employeeId: params.employeeId });
+
   const labels: Record<string, string> = {
     casual: "Casual Leave",
     sick: "Sick Leave",
@@ -217,17 +254,13 @@ export async function getLeaveBalance(params: {
     wfh: "Work From Home",
     comp_off: "Compensatory Off",
   };
-  
-  const types: Array<"casual" | "sick" | "earned" | "wfh" | "comp_off"> = [
-    "casual", "sick", "earned", "wfh", "comp_off"
-  ];
-  
-  return types.map(type => ({
-    leaveType: type,
-    totalDays: balances[type].total,
-    usedDays: balances[type].used,
-    remainingDays: balances[type].total - balances[type].used,
-    label: labels[type],
+
+  return balances.map((balance) => ({
+    leaveType: balance.leave_type,
+    totalDays: balance.total_days,
+    usedDays: balance.used_days,
+    remainingDays: balance.remaining_days,
+    label: labels[balance.leave_type] || balance.leave_type,
   }));
 }
 
@@ -342,12 +375,17 @@ export async function processApproval(params: {
   action: "approve" | "reject";
   comment?: string;
   managerId?: string;
+  type?: "leave" | "regularization" | "wfh";
 }): Promise<{
   success: boolean;
   message: string;
 }> {
-  const reviewerId = params.managerId || "mgr-001";
-  const isLeave = params.approvalId.startsWith("LV-");
+  if (!params.managerId) {
+    throw new Error("managerId is required to process approvals");
+  }
+  const reviewerId = params.managerId;
+  const approvalType = params.type || (params.approvalId.startsWith("LV-") ? "leave" : "regularization");
+  const isLeave = approvalType === "leave" || approvalType === "wfh";
   
   if (isLeave) {
     await post(
@@ -386,14 +424,29 @@ export async function getRequestStatus(params: {
   status: "pending" | "approved" | "rejected";
   details: string;
 }>> {
-  const leaveRequests = await get<Array<{
+  const [leaveRequests, regularizationRequests] = await Promise.all([
+    get<Array<{
     id: string;
-    leaveType: string;
-    startDate: string;
+    leaveType?: string;
+    startDate?: string;
+    submittedAt?: string;
+    leave_type?: string;
+    start_date?: string;
+    submitted_at?: string;
     reason: string;
     status: string;
-    submittedAt: string;
-  }>>("getLeaveRequests", { employeeId: params.employeeId });
+  }>>("getLeaveRequests", { employeeId: params.employeeId }),
+    get<Array<{
+      id: string;
+      requestType?: string;
+      date?: string;
+      submittedAt?: string;
+      request_type?: string;
+      submitted_at?: string;
+      reason: string;
+      status: string;
+    }>>("getRegularizationRequests", { employeeId: params.employeeId }),
+  ]);
   
   const labels: Record<string, string> = {
     casual: "Casual Leave",
@@ -410,14 +463,40 @@ export async function getRequestStatus(params: {
     submittedAt: string;
     status: "pending" | "approved" | "rejected";
     details: string;
-  }> = leaveRequests.map(lr => ({
-    id: lr.id,
-    type: "leave" as const,
-    title: `${labels[lr.leaveType] || lr.leaveType} - ${lr.startDate}`,
-    submittedAt: lr.submittedAt,
-    status: lr.status as "pending" | "approved" | "rejected",
-    details: lr.reason,
-  }));
+  }> = leaveRequests.map((lr) => {
+    const leaveType = lr.leaveType || lr.leave_type || "casual";
+    const startDate = lr.startDate || lr.start_date || "";
+    const submittedAt = lr.submittedAt || lr.submitted_at || new Date().toISOString();
+
+    return {
+      id: lr.id,
+      type: "leave" as const,
+      title: `${labels[leaveType] || leaveType} - ${startDate}`,
+      submittedAt,
+      status: lr.status as "pending" | "approved" | "rejected",
+      details: lr.reason,
+    };
+  });
+
+  for (const rr of regularizationRequests) {
+    const requestType = rr.requestType || rr.request_type || "correction";
+    const submittedAt = rr.submittedAt || rr.submitted_at || new Date().toISOString();
+    const date = rr.date || "";
+    const title = requestType === "missed_checkin"
+      ? `Missed Check-in - ${date}`
+      : requestType === "missed_checkout"
+      ? `Missed Check-out - ${date}`
+      : `Correction - ${date}`;
+
+    results.push({
+      id: rr.id,
+      type: "regularization",
+      title,
+      submittedAt,
+      status: rr.status as "pending" | "approved" | "rejected",
+      details: rr.reason,
+    });
+  }
   
   // Sort by submission date (newest first)
   results.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
@@ -440,7 +519,28 @@ export async function getNotifications(params: {
   read: boolean;
   relatedId?: string;
 }>> {
-  return get("getNotifications", { employeeId: params.employeeId });
+  const results = await get<Array<{
+    id: string;
+    type: string;
+    title: string;
+    message: string;
+    created_at?: string;
+    createdAt?: string;
+    is_read?: boolean;
+    read?: boolean;
+    related_id?: string | null;
+    relatedId?: string;
+  }>>("getNotifications", { employeeId: params.employeeId });
+
+  return results.map((notification) => ({
+    id: notification.id,
+    type: notification.type,
+    title: notification.title,
+    message: notification.message,
+    createdAt: notification.createdAt || notification.created_at || new Date().toISOString(),
+    read: notification.read ?? notification.is_read ?? false,
+    relatedId: notification.relatedId || notification.related_id || undefined,
+  }));
 }
 
 export async function markNotificationRead(params: { 
@@ -462,60 +562,7 @@ export async function getTeamMembers(params: {
   status: "available" | "wfh" | "on_leave" | "absent";
   todayAttendance?: { checkIn?: string; checkOut?: string };
 }>> {
-  const directReports = await get<Array<{
-    id: string;
-    employeeId: string;
-    name: string;
-    managerId: string | null;
-  }>>("getDirectReports", { managerId: params.managerId });
-  
-  const store = await get<{
-    attendance: Record<string, Array<{
-      date: string;
-      checkIn: string | null;
-      checkOut: string | null;
-      status: string;
-    }>>;
-    leaveRequests: Array<{
-      employeeId: string;
-      status: string;
-      startDate: string;
-      endDate: string;
-    }>;
-  }>("getStore", {});
-  
-  const today = new Date().toISOString().split("T")[0];
-  
-  return directReports.map(emp => {
-    const employeeAttendance = store.attendance[emp.id] || [];
-    const todayAttendance = employeeAttendance.find(a => a.date === today);
-    
-    const onLeave = store.leaveRequests.some(
-      lr => lr.employeeId === emp.id && 
-            lr.status === "approved" && 
-            lr.startDate <= today && 
-            lr.endDate >= today
-    );
-    
-    let status: "available" | "wfh" | "on_leave" | "absent" = "absent";
-    if (onLeave) {
-      status = "on_leave";
-    } else if (todayAttendance?.status === "wfh") {
-      status = "wfh";
-    } else if (todayAttendance?.checkIn) {
-      status = "available";
-    }
-    
-    return {
-      id: emp.id,
-      employeeId: emp.employeeId,
-      name: emp.name,
-      status,
-      todayAttendance: todayAttendance 
-        ? { checkIn: todayAttendance.checkIn || undefined, checkOut: todayAttendance.checkOut || undefined }
-        : undefined,
-    };
-  });
+  return get("getTeamMembers", { managerId: params.managerId });
 }
 
 // ============================================
@@ -546,22 +593,250 @@ export async function searchPolicies(params: {
   content: string;
   lastUpdated: string;
 }>> {
-  const store = await get<{
-    policies: Array<{
-      id: string;
-      title: string;
-      category: string;
-      content: string;
-      lastUpdated: string;
-    }>;
-  }>("getStore", {});
-  
-  const lowerQuery = params.query.toLowerCase();
-  return store.policies.filter(p => 
-    p.title.toLowerCase().includes(lowerQuery) ||
-    p.content.toLowerCase().includes(lowerQuery) ||
-    p.category.toLowerCase().includes(lowerQuery)
-  );
+  const results = await get<Array<{
+    id: string;
+    title: string;
+    category: string | null;
+    content: string;
+    created_at?: string;
+    last_updated?: string;
+    lastUpdated?: string;
+  }>>("searchPolicies", { query: params.query });
+
+  return results.map((policy) => ({
+    id: policy.id,
+    title: policy.title,
+    category: (policy.category || "General").toLowerCase(),
+    content: policy.content,
+    lastUpdated: policy.lastUpdated || policy.last_updated || policy.created_at || new Date().toISOString(),
+  }));
+}
+
+export async function getPolicies(): Promise<Array<{
+  id: string;
+  title: string;
+  category: string;
+  content: string;
+  lastUpdated: string;
+}>> {
+  const results = await get<Array<{
+    id: string;
+    title: string;
+    category: string | null;
+    content: string;
+    created_at?: string;
+    last_updated?: string;
+    lastUpdated?: string;
+  }>>("getPolicies", {});
+
+  return results.map((policy) => ({
+    id: policy.id,
+    title: policy.title,
+    category: (policy.category || "General").toLowerCase(),
+    content: policy.content,
+    lastUpdated: policy.lastUpdated || policy.last_updated || policy.created_at || new Date().toISOString(),
+  }));
+}
+
+export async function createPolicy(params: {
+  title: string;
+  category: string;
+  content: string;
+}): Promise<{ id: string }> {
+  const result = await post<{ id: string }>("createPolicy", {
+    policy: {
+      title: params.title,
+      category: params.category,
+      content: params.content,
+      lastUpdated: new Date().toISOString(),
+    },
+  });
+  notifyDataUpdate();
+  return result;
+}
+
+export async function updatePolicy(params: {
+  id: string;
+  title: string;
+  category: string;
+  content: string;
+}): Promise<{ id: string }> {
+  const result = await post<{ id: string }>("updatePolicy", {
+    id: params.id,
+    updates: {
+      title: params.title,
+      category: params.category,
+      content: params.content,
+      lastUpdated: new Date().toISOString(),
+    },
+  });
+  notifyDataUpdate();
+  return result;
+}
+
+export async function deletePolicy(params: { id: string }): Promise<{ success: boolean }> {
+  const result = await post<{ success: boolean }>("deletePolicy", { id: params.id });
+  notifyDataUpdate();
+  return result;
+}
+
+// ============================================
+// ANNOUNCEMENTS
+// ============================================
+
+export async function getAnnouncements(params: {
+  role?: "employee" | "manager" | "hr";
+}): Promise<Array<{
+  id: string;
+  title: string;
+  content: string;
+  audienceRole: string;
+  pinned: boolean;
+  createdAt: string;
+  expiresAt?: string | null;
+}>> {
+  const results = await get<Array<{
+    id: string;
+    title: string;
+    content: string;
+    audience_role: string;
+    pinned: boolean;
+    created_at: string;
+    expires_at?: string | null;
+  }>>("getAnnouncements", params.role ? { role: params.role } : {});
+
+  return results.map((item) => ({
+    id: item.id,
+    title: item.title,
+    content: item.content,
+    audienceRole: item.audience_role,
+    pinned: item.pinned,
+    createdAt: item.created_at,
+    expiresAt: item.expires_at || null,
+  }));
+}
+
+export async function createAnnouncement(params: {
+  title: string;
+  content: string;
+  audienceRole: "all" | "employee" | "manager" | "hr";
+  pinned?: boolean;
+  createdBy?: string | null;
+  expiresAt?: string | null;
+}): Promise<{ id: string }> {
+  const result = await post<{ id: string }>("createAnnouncement", {
+    announcement: {
+      title: params.title,
+      content: params.content,
+      audienceRole: params.audienceRole,
+      pinned: params.pinned ?? false,
+      createdBy: params.createdBy || null,
+      expiresAt: params.expiresAt || null,
+    },
+  });
+  notifyDataUpdate();
+  return result;
+}
+
+export async function deleteAnnouncement(params: { id: string }): Promise<{ success: boolean }> {
+  const result = await post<{ success: boolean }>("deleteAnnouncement", { id: params.id });
+  notifyDataUpdate();
+  return result;
+}
+
+// ============================================
+// DOCUMENTS & ACKNOWLEDGMENTS
+// ============================================
+
+export async function getDocuments(params: {
+  role?: "employee" | "manager" | "hr";
+}): Promise<Array<{
+  id: string;
+  title: string;
+  description?: string | null;
+  filePath: string;
+  audienceRole: string;
+  requiresAck: boolean;
+  createdAt: string;
+  expiresAt?: string | null;
+}>> {
+  const results = await get<Array<{
+    id: string;
+    title: string;
+    description?: string | null;
+    file_path: string;
+    audience_role: string;
+    requires_ack: boolean;
+    created_at: string;
+    expires_at?: string | null;
+  }>>("getDocuments", params.role ? { role: params.role } : {});
+
+  return results.map((item) => ({
+    id: item.id,
+    title: item.title,
+    description: item.description || null,
+    filePath: item.file_path,
+    audienceRole: item.audience_role,
+    requiresAck: item.requires_ack,
+    createdAt: item.created_at,
+    expiresAt: item.expires_at || null,
+  }));
+}
+
+export async function getAcknowledgedDocumentIds(params: {
+  employeeId: string;
+}): Promise<string[]> {
+  return get("getAcknowledgedDocumentIds", { employeeId: params.employeeId });
+}
+
+export async function acknowledgeDocument(params: {
+  employeeId: string;
+  documentId: string;
+}): Promise<{ id: string }> {
+  const result = await post<{ id: string }>("acknowledgeDocument", {
+    employeeId: params.employeeId,
+    documentId: params.documentId,
+  });
+  notifyDataUpdate();
+  return result;
+}
+
+export async function uploadDocument(params: {
+  file: File;
+  title: string;
+  description?: string;
+  audienceRole: "all" | "employee" | "manager" | "hr";
+  requiresAck?: boolean;
+  createdBy?: string | null;
+  expiresAt?: string | null;
+}): Promise<{ id: string; file_path: string }> {
+  const formData = new FormData();
+  formData.append("file", params.file);
+  formData.append("title", params.title);
+  formData.append("description", params.description || "");
+  formData.append("audienceRole", params.audienceRole);
+  formData.append("requiresAck", String(params.requiresAck ?? false));
+  formData.append("createdBy", params.createdBy || "");
+  formData.append("expiresAt", params.expiresAt || "");
+
+  const response = await fetch("/api/hr/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Upload failed");
+  }
+
+  notifyDataUpdate();
+  return response.json();
+}
+
+export async function deleteDocument(params: { id: string }): Promise<{ success: boolean }> {
+  const result = await post<{ success: boolean }>("deleteDocument", { id: params.id });
+  notifyDataUpdate();
+  return result;
 }
 
 // ============================================
