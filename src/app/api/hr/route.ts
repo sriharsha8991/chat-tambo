@@ -1,13 +1,13 @@
 /**
  * @file API Route for HR Data Operations
- * @description Handles all HR data operations (read/write to JSON store)
+ * @description Handles all HR data operations with Supabase (primary) or JSON (fallback)
  * 
- * This API route acts as a server-side bridge for the dataStore
- * since fs operations only work on the server.
+ * This API route uses the unified HR service which automatically selects
+ * between Supabase and JSON file storage based on configuration.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import * as dataStore from "@/services/dataStore";
+import * as hrService from "@/services/hr-unified";
 
 // ============================================
 // GET: Read operations
@@ -20,14 +20,14 @@ export async function GET(request: NextRequest) {
     const employeeId = searchParams.get("employeeId");
     const managerId = searchParams.get("managerId");
 
-    console.log(`[HR API] GET action=${action}, employeeId=${employeeId}, managerId=${managerId}`);
+    console.log(`[HR API] GET action=${action}, employeeId=${employeeId}, managerId=${managerId}, backend=${hrService.getBackendType()}`);
 
     switch (action) {
       case "getEmployee":
         if (!employeeId) {
           return NextResponse.json({ error: "employeeId required" }, { status: 400 });
         }
-        const employee = dataStore.getEmployee(employeeId);
+        const employee = await hrService.getEmployee(employeeId);
         if (!employee) {
           return NextResponse.json({ error: `Employee not found: ${employeeId}` }, { status: 404 });
         }
@@ -37,17 +37,17 @@ export async function GET(request: NextRequest) {
         if (!managerId) {
           return NextResponse.json({ error: "managerId required" }, { status: 400 });
         }
-        return NextResponse.json(dataStore.getDirectReports(managerId) || []);
+        return NextResponse.json(await hrService.getDirectReports(managerId) || []);
 
       case "getAllEmployees":
-        return NextResponse.json(dataStore.getAllEmployees());
+        return NextResponse.json(await hrService.getAllEmployees());
 
       case "getLeaveBalances":
         if (!employeeId) {
           return NextResponse.json({ error: "employeeId required" }, { status: 400 });
         }
-        const leaveBalances = dataStore.getLeaveBalances(employeeId);
-        if (!leaveBalances) {
+        const leaveBalances = await hrService.getLeaveBalances(employeeId);
+        if (!leaveBalances || leaveBalances.length === 0) {
           return NextResponse.json({ error: `Leave balances not found for employee: ${employeeId}` }, { status: 404 });
         }
         return NextResponse.json(leaveBalances);
@@ -56,40 +56,40 @@ export async function GET(request: NextRequest) {
         if (!employeeId) {
           return NextResponse.json({ error: "employeeId required" }, { status: 400 });
         }
-        return NextResponse.json(dataStore.getAttendanceRecords(employeeId) || []);
+        return NextResponse.json(await hrService.getAttendanceRecords(employeeId) || []);
 
       case "getTodayAttendance":
         if (!employeeId) {
           return NextResponse.json({ error: "employeeId required" }, { status: 400 });
         }
-        return NextResponse.json(dataStore.getTodayAttendance(employeeId) || null);
+        return NextResponse.json(await hrService.getTodayAttendance(employeeId) || null);
 
       case "getLeaveRequests":
-        return NextResponse.json(dataStore.getLeaveRequests(employeeId || undefined));
+        return NextResponse.json(await hrService.getLeaveRequests(employeeId || undefined));
 
       case "getPendingLeaveRequests":
-        return NextResponse.json(dataStore.getPendingLeaveRequests(managerId || undefined));
+        return NextResponse.json(await hrService.getPendingLeaveRequests(managerId || undefined));
 
       case "getRegularizationRequests":
-        return NextResponse.json(dataStore.getRegularizationRequests(employeeId || undefined));
+        return NextResponse.json(await hrService.getRegularizationRequests(employeeId || undefined));
 
       case "getPendingApprovals":
         if (!managerId) {
           return NextResponse.json({ error: "managerId required" }, { status: 400 });
         }
-        return NextResponse.json(dataStore.getAllPendingApprovals(managerId));
+        return NextResponse.json(await hrService.getAllPendingApprovals(managerId));
 
       case "getNotifications":
         if (!employeeId) {
           return NextResponse.json({ error: "employeeId required" }, { status: 400 });
         }
-        return NextResponse.json(dataStore.getNotifications(employeeId));
+        return NextResponse.json(await hrService.getNotifications(employeeId));
 
       case "getSystemMetrics":
-        return NextResponse.json(dataStore.getSystemMetrics());
+        return NextResponse.json(await hrService.getSystemMetrics());
 
-      case "getStore":
-        return NextResponse.json(dataStore.readStore());
+      case "getBackendType":
+        return NextResponse.json({ backend: hrService.getBackendType() });
 
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { action, ...data } = body;
 
-    console.log(`[HR API] POST action=${action}`, JSON.stringify(data).substring(0, 200));
+    console.log(`[HR API] POST action=${action}, backend=${hrService.getBackendType()}`, JSON.stringify(data).substring(0, 200));
 
     switch (action) {
       case "addOrUpdateAttendance": {
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
         if (!employeeId || !record) {
           return NextResponse.json({ error: "employeeId and record required" }, { status: 400 });
         }
-        dataStore.addOrUpdateAttendance(employeeId, record);
+        await hrService.addOrUpdateAttendance(employeeId, record);
         return NextResponse.json({ success: true });
       }
 
@@ -127,7 +127,14 @@ export async function POST(request: NextRequest) {
         if (!leaveRequest) {
           return NextResponse.json({ error: "request required" }, { status: 400 });
         }
-        const result = dataStore.createLeaveRequest(leaveRequest);
+        const result = await hrService.createLeaveRequest({
+          employeeId: leaveRequest.employeeId,
+          leaveType: leaveRequest.leaveType,
+          startDate: leaveRequest.startDate,
+          endDate: leaveRequest.endDate,
+          daysRequested: leaveRequest.daysRequested,
+          reason: leaveRequest.reason,
+        });
         return NextResponse.json(result);
       }
 
@@ -136,7 +143,7 @@ export async function POST(request: NextRequest) {
         if (!requestId || !reviewerId) {
           return NextResponse.json({ error: "requestId and reviewerId required" }, { status: 400 });
         }
-        const result = dataStore.approveLeaveRequest(requestId, reviewerId, comment);
+        const result = await hrService.approveLeaveRequest(requestId, reviewerId, comment);
         return NextResponse.json(result || { error: "Request not found or not pending" });
       }
 
@@ -145,7 +152,7 @@ export async function POST(request: NextRequest) {
         if (!requestId || !reviewerId) {
           return NextResponse.json({ error: "requestId and reviewerId required" }, { status: 400 });
         }
-        const result = dataStore.rejectLeaveRequest(requestId, reviewerId, comment);
+        const result = await hrService.rejectLeaveRequest(requestId, reviewerId, comment);
         return NextResponse.json(result || { error: "Request not found" });
       }
 
@@ -154,7 +161,13 @@ export async function POST(request: NextRequest) {
         if (!regRequest) {
           return NextResponse.json({ error: "request required" }, { status: 400 });
         }
-        const result = dataStore.createRegularizationRequest(regRequest);
+        const result = await hrService.createRegularizationRequest({
+          employeeId: regRequest.employeeId,
+          date: regRequest.date,
+          requestType: regRequest.requestType,
+          requestedTime: regRequest.requestedTime,
+          reason: regRequest.reason,
+        });
         return NextResponse.json(result);
       }
 
@@ -163,7 +176,7 @@ export async function POST(request: NextRequest) {
         if (!requestId || !reviewerId) {
           return NextResponse.json({ error: "requestId and reviewerId required" }, { status: 400 });
         }
-        const result = dataStore.approveRegularization(requestId, reviewerId, comment);
+        const result = await hrService.approveRegularization(requestId, reviewerId, comment);
         return NextResponse.json(result || { error: "Request not found or not pending" });
       }
 
@@ -172,7 +185,7 @@ export async function POST(request: NextRequest) {
         if (!requestId || !reviewerId) {
           return NextResponse.json({ error: "requestId and reviewerId required" }, { status: 400 });
         }
-        const result = dataStore.rejectRegularization(requestId, reviewerId, comment);
+        const result = await hrService.rejectRegularization(requestId, reviewerId, comment);
         return NextResponse.json(result || { error: "Request not found" });
       }
 
@@ -181,7 +194,7 @@ export async function POST(request: NextRequest) {
         if (!notificationId) {
           return NextResponse.json({ error: "notificationId required" }, { status: 400 });
         }
-        dataStore.markNotificationRead(notificationId);
+        await hrService.markNotificationRead(notificationId);
         return NextResponse.json({ success: true });
       }
 
@@ -190,7 +203,7 @@ export async function POST(request: NextRequest) {
         if (!employeeId || !leaveType || usedDays === undefined) {
           return NextResponse.json({ error: "employeeId, leaveType, and usedDays required" }, { status: 400 });
         }
-        dataStore.updateLeaveBalance(employeeId, leaveType, usedDays);
+        await hrService.updateLeaveBalance(employeeId, leaveType, usedDays);
         return NextResponse.json({ success: true });
       }
 

@@ -48,6 +48,7 @@ export type Database = {
           avatar_url?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       attendance: {
         Row: {
@@ -80,6 +81,7 @@ export type Database = {
           source?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
       regularization_requests: {
         Row: {
@@ -87,37 +89,47 @@ export type Database = {
           employee_id: string;
           date: string;
           request_type: "missed_checkin" | "missed_checkout" | "correction";
-          requested_time: string | null;
-          reason: string | null;
+          requested_time: string;
+          reason: string;
           status: "pending" | "approved" | "rejected";
-          approver_id: string | null;
-          approved_at: string | null;
+          submitted_at: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          review_comment: string | null;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
           employee_id: string;
           date: string;
           request_type: "missed_checkin" | "missed_checkout" | "correction";
-          requested_time?: string | null;
-          reason?: string | null;
+          requested_time: string;
+          reason: string;
           status?: "pending" | "approved" | "rejected";
-          approver_id?: string | null;
-          approved_at?: string | null;
+          submitted_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          review_comment?: string | null;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
           employee_id?: string;
           date?: string;
           request_type?: "missed_checkin" | "missed_checkout" | "correction";
-          requested_time?: string | null;
-          reason?: string | null;
+          requested_time?: string;
+          reason?: string;
           status?: "pending" | "approved" | "rejected";
-          approver_id?: string | null;
-          approved_at?: string | null;
+          submitted_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          review_comment?: string | null;
           created_at?: string;
+          updated_at?: string;
         };
+        Relationships: [];
       };
       leave_balances: {
         Row: {
@@ -144,6 +156,7 @@ export type Database = {
           used_days?: number;
           year?: number;
         };
+        Relationships: [];
       };
       leave_requests: {
         Row: {
@@ -152,12 +165,15 @@ export type Database = {
           leave_type: string;
           start_date: string;
           end_date: string;
-          days: number;
-          reason: string | null;
+          days_requested: number;
+          reason: string;
           status: "pending" | "approved" | "rejected" | "cancelled";
-          approver_id: string | null;
-          approved_at: string | null;
+          submitted_at: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          review_comment: string | null;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -165,12 +181,15 @@ export type Database = {
           leave_type: string;
           start_date: string;
           end_date: string;
-          days: number;
-          reason?: string | null;
+          days_requested: number;
+          reason: string;
           status?: "pending" | "approved" | "rejected" | "cancelled";
-          approver_id?: string | null;
-          approved_at?: string | null;
+          submitted_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          review_comment?: string | null;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -178,13 +197,17 @@ export type Database = {
           leave_type?: string;
           start_date?: string;
           end_date?: string;
-          days?: number;
-          reason?: string | null;
+          days_requested?: number;
+          reason?: string;
           status?: "pending" | "approved" | "rejected" | "cancelled";
-          approver_id?: string | null;
-          approved_at?: string | null;
+          submitted_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          review_comment?: string | null;
           created_at?: string;
+          updated_at?: string;
         };
+        Relationships: [];
       };
       policies: {
         Row: {
@@ -208,6 +231,7 @@ export type Database = {
           content?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
       notifications: {
         Row: {
@@ -237,19 +261,13 @@ export type Database = {
           read?: boolean;
           created_at?: string;
         };
+        Relationships: [];
       };
     };
-    Views: {
-      pending_approvals: {
-        Row: {
-          type: string;
-          id: string;
-          employee_id: string;
-          created_at: string;
-          status: string;
-        };
-      };
-    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 };
 

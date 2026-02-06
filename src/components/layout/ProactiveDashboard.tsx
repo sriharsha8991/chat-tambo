@@ -41,6 +41,9 @@ import {
   searchPolicies,
 } from "@/services/hr-api-client";
 
+// Import real-time hook for Supabase subscriptions
+import { useRealtimeHR } from "@/lib/use-realtime-hr";
+
 function ProactiveAlert({ type, title, message }: { type: "warning" | "info"; title: string; message: string }) {
   return (
     <Alert variant={type === "warning" ? "destructive" : "default"} className="mb-4">
@@ -86,6 +89,14 @@ function EmployeeDashboard() {
       setIsRefreshing(false);
     }
   }, [currentUser.id]);
+
+  // Real-time subscriptions for Supabase
+  useRealtimeHR({
+    employeeId: currentUser.id,
+    onLeaveRequestChange: () => fetchData(true),
+    onAttendanceChange: () => fetchData(true),
+    onNotificationChange: () => fetchData(true),
+  });
 
   useEffect(() => {
     fetchData();
@@ -222,25 +233,51 @@ function ManagerDashboard() {
   const [approvals, setApprovals] = useState<Awaited<ReturnType<typeof getPendingApprovals>>>([]);
   const [teamMembers, setTeamMembers] = useState<Awaited<ReturnType<typeof getTeamMembers>>>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchData = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setIsRefreshing(true);
+    else setIsLoading(true);
+    
+    try {
+      const [apprs, team] = await Promise.all([
+        getPendingApprovals({ managerId: currentUser.id }),
+        getTeamMembers({ managerId: currentUser.id }),
+      ]);
+      setApprovals(apprs);
+      setTeamMembers(team);
+    } catch (error) {
+      console.error("Failed to fetch manager data:", error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [currentUser.id]);
+
+  // Real-time subscriptions for Supabase - Manager sees updates instantly
+  useRealtimeHR({
+    managerId: currentUser.id,
+    onLeaveRequestChange: () => fetchData(true),
+    onRegularizationChange: () => fetchData(true),
+    onNotificationChange: () => fetchData(true),
+  });
 
   useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const [apprs, team] = await Promise.all([
-          getPendingApprovals({ managerId: currentUser.id }),
-          getTeamMembers({ managerId: currentUser.id }),
-        ]);
-        setApprovals(apprs);
-        setTeamMembers(team);
-      } catch (error) {
-        console.error("Failed to fetch manager data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
     fetchData();
-  }, [currentUser.id]);
+    
+    // Auto-refresh when window gains focus
+    const handleFocus = () => fetchData(true);
+    window.addEventListener("focus", handleFocus);
+    
+    // Listen for custom refresh event (from chat actions)
+    const handleRefresh = () => fetchData(true);
+    window.addEventListener("hr-data-updated", handleRefresh);
+    
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("hr-data-updated", handleRefresh);
+    };
+  }, [fetchData]);
 
   const presentCount = teamMembers.filter(m => m.status === "available" && m.todayAttendance?.checkIn).length;
   const wfhCount = teamMembers.filter(m => m.status === "wfh").length;
@@ -339,25 +376,51 @@ function HRDashboard() {
   const [metrics, setMetrics] = useState<Awaited<ReturnType<typeof getSystemMetrics>> | null>(null);
   const [policies, setPolicies] = useState<Awaited<ReturnType<typeof searchPolicies>>>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchData = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setIsRefreshing(true);
+    else setIsLoading(true);
+    
+    try {
+      const [systemMetrics, allPolicies] = await Promise.all([
+        getSystemMetrics(),
+        searchPolicies({ query: "" }),
+      ]);
+      setMetrics(systemMetrics);
+      setPolicies(allPolicies);
+    } catch (error) {
+      console.error("Failed to fetch HR data:", error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  // Real-time subscriptions for Supabase - HR sees all updates
+  useRealtimeHR({
+    onLeaveRequestChange: () => fetchData(true),
+    onRegularizationChange: () => fetchData(true),
+    onAttendanceChange: () => fetchData(true),
+    onNotificationChange: () => fetchData(true),
+  });
 
   useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const [systemMetrics, allPolicies] = await Promise.all([
-          getSystemMetrics(),
-          searchPolicies({ query: "" }),
-        ]);
-        setMetrics(systemMetrics);
-        setPolicies(allPolicies);
-      } catch (error) {
-        console.error("Failed to fetch HR data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
     fetchData();
-  }, []);
+    
+    // Auto-refresh when window gains focus
+    const handleFocus = () => fetchData(true);
+    window.addEventListener("focus", handleFocus);
+    
+    // Listen for custom refresh event (from chat actions)
+    const handleRefresh = () => fetchData(true);
+    window.addEventListener("hr-data-updated", handleRefresh);
+    
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("hr-data-updated", handleRefresh);
+    };
+  }, [fetchData]);
 
   return (
     <div className="space-y-6">

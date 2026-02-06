@@ -16,7 +16,7 @@ const API_BASE = "/api/hr";
 /**
  * Dispatch event to notify UI components that HR data has changed
  */
-function notifyDataUpdate(): void {
+export function notifyDataUpdate(): void {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("hr-data-updated"));
   }
