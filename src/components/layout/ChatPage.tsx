@@ -35,6 +35,7 @@ import {
   ThreadHistoryNewButton,
   ThreadHistorySearch,
 } from "@/components/tambo/thread-history";
+import { NotifierBell } from "@/components/layout/NotifierBell";
 import { useTambo } from "@tambo-ai/react";
 import {
   ChevronDown,
@@ -173,6 +174,7 @@ export function ChatPage({ showSidebar = true }: ChatPageProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          <NotifierBell />
           {/* Persona Switcher */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
