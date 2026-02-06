@@ -5,6 +5,7 @@ import {
   DocumentAcknowledgmentRow,
 } from './base';
 import { resolveEmployeeUuid } from './utils';
+import { createNotification } from './notifications';
 
 export async function getDocuments(role?: string): Promise<DocumentRow[]> {
   if (!isSupabaseConfigured()) return [];
@@ -77,6 +78,15 @@ export async function createDocument(input: {
     console.error('Error creating document:', error);
     return null;
   }
+
+  await createNotification({
+    employeeId: null,
+    audienceRole: input.audienceRole,
+    type: 'document_uploaded',
+    title: input.title,
+    message: input.description || 'A new document is available.',
+    relatedId: (data as DocumentRow).id,
+  });
 
   return data as DocumentRow;
 }

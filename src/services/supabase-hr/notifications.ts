@@ -1,17 +1,30 @@
 import { getDb, isSupabaseConfigured, NotificationRow } from './base';
 import { resolveEmployeeUuid } from './utils';
 
-export async function getNotifications(employeeId: string): Promise<NotificationRow[]> {
+export async function getNotifications(
+  employeeId?: string,
+  role?: 'employee' | 'manager' | 'hr'
+): Promise<NotificationRow[]> {
   if (!isSupabaseConfigured()) return [];
 
-  const employeeUuid = await resolveEmployeeUuid(employeeId);
-
-  const { data, error } = await getDb()
+  let query = getDb()
     .from('notifications')
     .select('*')
-    .eq('employee_id', employeeUuid)
     .order('created_at', { ascending: false })
     .limit(50);
+
+  if (employeeId) {
+    const employeeUuid = await resolveEmployeeUuid(employeeId);
+    if (role) {
+      query = query.or(`employee_id.eq.${employeeUuid},audience_role.in.(all,${role})`);
+    } else {
+      query = query.eq('employee_id', employeeUuid);
+    }
+  } else if (role) {
+    query = query.in('audience_role', ['all', role]);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Error fetching notifications:', error);
@@ -22,7 +35,8 @@ export async function getNotifications(employeeId: string): Promise<Notification
 }
 
 export async function createNotification(notification: {
-  employeeId: string;
+  employeeId?: string | null;
+  audienceRole?: 'all' | 'employee' | 'manager' | 'hr';
   type: string;
   title: string;
   message: string;
@@ -30,12 +44,15 @@ export async function createNotification(notification: {
 }): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
 
-  const employeeUuid = await resolveEmployeeUuid(notification.employeeId);
+  const employeeUuid = notification.employeeId
+    ? await resolveEmployeeUuid(notification.employeeId)
+    : null;
 
   const { error } = await getDb()
     .from('notifications')
     .insert({
       employee_id: employeeUuid,
+      audience_role: notification.audienceRole || 'employee',
       type: notification.type,
       title: notification.title,
       message: notification.message,

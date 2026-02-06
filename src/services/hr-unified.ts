@@ -238,9 +238,9 @@ export async function rejectRegularization(
 // NOTIFICATION OPERATIONS
 // ============================================
 
-export async function getNotifications(employeeId: string) {
+export async function getNotifications(employeeId?: string, role?: 'employee' | 'manager' | 'hr') {
   requireSupabase();
-  return supabaseHR.getNotifications(employeeId);
+  return supabaseHR.getNotifications(employeeId, role);
 }
 
 export async function markNotificationRead(notificationId: string) {

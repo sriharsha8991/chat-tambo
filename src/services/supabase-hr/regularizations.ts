@@ -68,6 +68,17 @@ export async function createRegularizationRequest(request: {
     });
   }
 
+  if (newRequest) {
+    await createNotification({
+      employeeId: null,
+      audienceRole: 'hr',
+      type: 'pending_regularization_request',
+      title: 'Pending Regularization Request',
+      message: `${employee?.name || 'An employee'} submitted a regularization request for ${request.date}.`,
+      relatedId: newRequest.id,
+    });
+  }
+
   return newRequest;
 }
 

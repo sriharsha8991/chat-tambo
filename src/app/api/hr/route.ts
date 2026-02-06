@@ -87,10 +87,12 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(await hrService.getAllPendingApprovals(managerId));
 
       case "getNotifications":
-        if (!employeeId) {
-          return NextResponse.json({ error: "employeeId required" }, { status: 400 });
-        }
-        return NextResponse.json(await hrService.getNotifications(employeeId));
+        return NextResponse.json(
+          await hrService.getNotifications(
+            employeeId || undefined,
+            (searchParams.get("role") as "employee" | "manager" | "hr" | null) || undefined
+          )
+        );
 
       case "searchPolicies": {
         const query = searchParams.get("query") || "";

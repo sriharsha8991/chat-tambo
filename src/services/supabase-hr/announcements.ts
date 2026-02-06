@@ -1,4 +1,5 @@
 import { getDb, isSupabaseConfigured, AnnouncementRow } from './base';
+import { createNotification } from './notifications';
 
 export async function getAnnouncements(role?: string): Promise<AnnouncementRow[]> {
   if (!isSupabaseConfigured()) return [];
@@ -53,6 +54,14 @@ export async function createAnnouncement(input: {
     console.error('Error creating announcement:', error);
     return null;
   }
+
+  await createNotification({
+    employeeId: null,
+    audienceRole: input.audienceRole,
+    type: 'announcement_posted',
+    title: input.title,
+    message: input.content,
+  });
 
   return data as AnnouncementRow;
 }

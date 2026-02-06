@@ -1,4 +1,5 @@
 import { getDb, isSupabaseConfigured, PolicyRow } from './base';
+import { createNotification } from './notifications';
 
 export async function searchPolicies(query: string): Promise<PolicyRow[]> {
   if (!isSupabaseConfigured()) return [];
@@ -40,6 +41,15 @@ export async function createPolicy(input: {
     return null;
   }
 
+  await createNotification({
+    employeeId: null,
+    audienceRole: 'all',
+    type: 'policy_created',
+    title: input.title,
+    message: 'A new policy has been published.',
+    relatedId: (data as PolicyRow).id,
+  });
+
   return data as PolicyRow;
 }
 
@@ -65,6 +75,15 @@ export async function updatePolicy(
     console.error('Error updating policy:', error);
     return null;
   }
+
+  await createNotification({
+    employeeId: null,
+    audienceRole: 'all',
+    type: 'policy_updated',
+    title: updates.title || 'Policy Updated',
+    message: 'A policy has been updated.',
+    relatedId: (data as PolicyRow).id,
+  });
 
   return data as PolicyRow;
 }

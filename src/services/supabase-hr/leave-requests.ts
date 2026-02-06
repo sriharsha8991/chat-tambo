@@ -115,6 +115,17 @@ export async function createLeaveRequest(request: {
     });
   }
 
+  if (newRequest) {
+    await createNotification({
+      employeeId: null,
+      audienceRole: 'hr',
+      type: 'pending_leave_request',
+      title: 'Pending Leave Request',
+      message: `${employee?.name || 'An employee'} submitted a leave request for ${request.startDate} to ${request.endDate}.`,
+      relatedId: newRequest.id,
+    });
+  }
+
   return newRequest;
 }
 

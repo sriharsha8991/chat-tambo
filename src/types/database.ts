@@ -341,7 +341,8 @@ export type Database = {
       notifications: {
         Row: {
           id: string;
-          employee_id: string;
+          employee_id: string | null;
+          audience_role: string;
           type: string;
           title: string;
           message: string;
@@ -351,7 +352,8 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          employee_id: string;
+          employee_id?: string | null;
+          audience_role?: string;
           type: string;
           title: string;
           message: string;
@@ -361,7 +363,8 @@ export type Database = {
         };
         Update: {
           id?: string;
-          employee_id?: string;
+          employee_id?: string | null;
+          audience_role?: string;
           type?: string;
           title?: string;
           message?: string;

@@ -509,7 +509,8 @@ export async function getRequestStatus(params: {
 // ============================================
 
 export async function getNotifications(params: { 
-  employeeId: string 
+  employeeId?: string;
+  role?: "employee" | "manager" | "hr";
 }): Promise<Array<{
   id: string;
   type: string;
@@ -517,6 +518,7 @@ export async function getNotifications(params: {
   message: string;
   createdAt: string;
   read: boolean;
+  audienceRole?: string;
   relatedId?: string;
 }>> {
   const results = await get<Array<{
@@ -528,9 +530,14 @@ export async function getNotifications(params: {
     createdAt?: string;
     is_read?: boolean;
     read?: boolean;
+    audience_role?: string;
+    audienceRole?: string;
     related_id?: string | null;
     relatedId?: string;
-  }>>("getNotifications", { employeeId: params.employeeId });
+  }>>("getNotifications", {
+    ...(params.employeeId ? { employeeId: params.employeeId } : {}),
+    ...(params.role ? { role: params.role } : {}),
+  });
 
   return results.map((notification) => ({
     id: notification.id,
@@ -539,6 +546,7 @@ export async function getNotifications(params: {
     message: notification.message,
     createdAt: notification.createdAt || notification.created_at || new Date().toISOString(),
     read: notification.read ?? notification.is_read ?? false,
+    audienceRole: notification.audienceRole || notification.audience_role || undefined,
     relatedId: notification.relatedId || notification.related_id || undefined,
   }));
 }

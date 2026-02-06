@@ -96,7 +96,8 @@ CREATE TABLE regularization_requests (
 -- ============================================
 CREATE TABLE notifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
+  audience_role VARCHAR(20) NOT NULL DEFAULT 'employee' CHECK (audience_role IN ('all', 'employee', 'manager', 'hr')),
   type VARCHAR(50) NOT NULL,
   title VARCHAR(200) NOT NULL,
   message TEXT NOT NULL,
@@ -170,6 +171,7 @@ CREATE INDEX idx_regularization_employee ON regularization_requests(employee_id)
 CREATE INDEX idx_regularization_status ON regularization_requests(status);
 CREATE INDEX idx_notifications_employee ON notifications(employee_id);
 CREATE INDEX idx_notifications_read ON notifications(is_read);
+CREATE INDEX idx_notifications_audience ON notifications(audience_role);
 CREATE INDEX idx_announcements_audience ON announcements(audience_role);
 CREATE INDEX idx_announcements_created ON announcements(created_at);
 CREATE INDEX idx_documents_audience ON documents(audience_role);
