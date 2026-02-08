@@ -4,6 +4,7 @@ export { LoadingCard, LoadingChart, LoadingListItem, LoadingStatCard } from "./s
 export { EmptyState } from "./shared/EmptyState";
 export { AnnouncementsFeed } from "./shared/AnnouncementsFeed";
 export { DocumentsAcknowledgeList } from "./shared/DocumentsAcknowledgeList";
+export { SalarySlipForm } from "./shared/SalarySlipForm";
 
 // Employee components
 export {

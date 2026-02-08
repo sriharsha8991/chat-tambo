@@ -24,7 +24,7 @@ export const graphVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-background",
+        default: "bg-background border border-border/60",
         solid: [
           "shadow-lg shadow-zinc-900/10 dark:shadow-zinc-900/20",
           "bg-muted",
@@ -164,10 +164,10 @@ export type GraphDataType = z.infer<typeof graphDataSchema>;
  * Recharts/SVG props instead of wrapping them in `hsl()`/`oklch()`.
  */
 const defaultColors = [
-  "hsl(220, 100%, 62%)", // Blue
-  "hsl(160, 82%, 47%)", // Green
-  "hsl(32, 100%, 62%)", // Orange
-  "hsl(340, 82%, 66%)", // Pink
+  "var(--chart-1, hsl(220, 100%, 62%))",
+  "var(--chart-2, hsl(160, 82%, 47%))",
+  "var(--chart-3, hsl(32, 100%, 62%))",
+  "var(--chart-4, hsl(340, 82%, 66%))",
 ];
 
 /**
@@ -304,7 +304,7 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
           return (
             <RechartsCore.BarChart data={chartData}>
               <RechartsCore.CartesianGrid
-                strokeDasharray="3 3"
+                strokeDasharray="4 4"
                 vertical={false}
                 stroke="var(--border)"
               />
@@ -313,11 +313,13 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
                 stroke="var(--muted-foreground)"
                 axisLine={false}
                 tickLine={false}
+                tick={{ fontSize: 12 }}
               />
               <RechartsCore.YAxis
                 stroke="var(--muted-foreground)"
                 axisLine={false}
                 tickLine={false}
+                tick={{ fontSize: 12 }}
               />
               <RechartsCore.Tooltip
                 cursor={{
@@ -326,10 +328,12 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
                   radius: 4,
                 }}
                 contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #e5e7eb",
+                  backgroundColor: "var(--background)",
+                  border: "1px solid var(--border)",
                   borderRadius: "var(--radius)",
                   color: "var(--foreground)",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+                  padding: "8px 10px",
                 }}
               />
               {showLegend && (
@@ -346,7 +350,10 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
                   fill={
                     dataset.color ?? defaultColors[index % defaultColors.length]
                   }
-                  radius={[4, 4, 0, 0]}
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={36}
+                  stroke="var(--background)"
+                  strokeWidth={1}
                 />
               ))}
             </RechartsCore.BarChart>
@@ -354,9 +361,9 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
 
         case "line":
           return (
-            <RechartsCore.LineChart data={chartData}>
+            <RechartsCore.BarChart data={chartData}>
               <RechartsCore.CartesianGrid
-                strokeDasharray="3 3"
+                strokeDasharray="4 4"
                 vertical={false}
                 stroke="var(--border)"
               />
@@ -365,23 +372,27 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
                 stroke="var(--muted-foreground)"
                 axisLine={false}
                 tickLine={false}
+                tick={{ fontSize: 12 }}
               />
               <RechartsCore.YAxis
                 stroke="var(--muted-foreground)"
                 axisLine={false}
                 tickLine={false}
+                tick={{ fontSize: 12 }}
               />
               <RechartsCore.Tooltip
                 cursor={{
-                  stroke: "var(--muted)",
-                  strokeWidth: 2,
-                  strokeOpacity: 0.3,
+                  fill: "var(--muted-foreground)",
+                  fillOpacity: 0.1,
+                  radius: 4,
                 }}
                 contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #e5e7eb",
+                  backgroundColor: "var(--background)",
+                  border: "1px solid var(--border)",
                   borderRadius: "var(--radius)",
                   color: "var(--foreground)",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+                  padding: "8px 10px",
                 }}
               />
               {showLegend && (
@@ -392,17 +403,19 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
                 />
               )}
               {validDatasets.map((dataset, index) => (
-                <RechartsCore.Line
+                <RechartsCore.Bar
                   key={dataset.label}
-                  type="monotone"
                   dataKey={dataset.label}
-                  stroke={
+                  fill={
                     dataset.color ?? defaultColors[index % defaultColors.length]
                   }
-                  dot={false}
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={28}
+                  stroke="var(--background)"
+                  strokeWidth={1}
                 />
               ))}
-            </RechartsCore.LineChart>
+            </RechartsCore.BarChart>
           );
 
         case "pie": {
@@ -418,31 +431,97 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
             );
           }
 
+          const pieData = pieDataset.data
+            .slice(0, maxDataPoints)
+            .map((value, index) => ({
+              name: data.labels[index],
+              value,
+              fill: defaultColors[index % defaultColors.length],
+            }));
+
+          const renderPieLabel = (props: {
+            name?: string;
+            value?: number;
+            percent?: number;
+            cx?: number;
+            cy?: number;
+            midAngle?: number;
+            innerRadius?: number;
+            outerRadius?: number;
+          }) => {
+            const {
+              name,
+              value,
+              percent,
+              cx = 0,
+              cy = 0,
+              midAngle = 0,
+              innerRadius = 0,
+              outerRadius = 0,
+            } = props;
+
+            const radius = innerRadius + (outerRadius - innerRadius) * 0.65;
+            const angle = (Math.PI / 180) * -midAngle;
+            const x = cx + radius * Math.cos(angle);
+            const y = cy + radius * Math.sin(angle);
+            const percentValue = Number.isFinite(percent)
+              ? `${Math.round((percent || 0) * 100)}%`
+              : "";
+            const valueLabel = Number.isFinite(value) ? String(value) : "";
+            const label = [name, valueLabel, percentValue].filter(Boolean).join(" · ");
+
+            return (
+              <text
+                x={x}
+                y={y}
+                textAnchor={x > cx ? "start" : "end"}
+                dominantBaseline="central"
+                className="fill-foreground text-xs"
+              >
+                {label}
+              </text>
+            );
+          };
+
           return (
             <RechartsCore.PieChart>
+              {/* Depth layer for 3D-like effect */}
               <RechartsCore.Pie
-                data={pieDataset.data
-                  .slice(0, maxDataPoints)
-                  .map((value, index) => ({
-                    name: data.labels[index],
-                    value,
-                    fill: defaultColors[index % defaultColors.length],
-                  }))}
+                data={pieData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="52%"
+                innerRadius={50}
+                outerRadius={90}
+                labelLine={false}
+                fill="var(--muted)"
+                opacity={0.35}
+                stroke="none"
+              />
+              <RechartsCore.Pie
+                data={pieData}
                 dataKey="value"
                 nameKey="name"
                 cx="50%"
                 cy="50%"
-                labelLine={false}
-                outerRadius={80}
-                fill="#8884d8"
+                labelLine={{ stroke: "var(--border)" }}
+                label={renderPieLabel}
+                innerRadius={50}
+                outerRadius={90}
+                paddingAngle={2}
+                cornerRadius={6}
+                stroke="var(--background)"
+                strokeWidth={3}
               />
               <RechartsCore.Tooltip
                 contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #e5e7eb",
+                  backgroundColor: "var(--background)",
+                  border: "1px solid var(--border)",
                   borderRadius: "var(--radius)",
                   color: "var(--foreground)",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+                  padding: "8px 10px",
                 }}
                 itemStyle={{
                   color: "var(--foreground)",

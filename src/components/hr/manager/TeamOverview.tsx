@@ -62,9 +62,21 @@ const statusConfig = {
 };
 
 export function TeamOverview({ members = [], onMemberClick }: TeamOverviewProps) {
-  const getInitials = (name: string) => {
+  const resolveStatusKey = (
+    status: TeamMember["status"] | undefined,
+    hasCheckIn: boolean
+  ): keyof typeof statusConfig => {
+    if (!status) return "absent";
+    if (status === "available" && !hasCheckIn) return "offline";
+    return status as keyof typeof statusConfig;
+  };
+
+  const getInitials = (name?: string) => {
+    if (!name) return "??";
     return name
+      .trim()
       .split(" ")
+      .filter(Boolean)
       .map((n) => n[0])
       .join("")
       .toUpperCase()
@@ -121,7 +133,7 @@ export function TeamOverview({ members = [], onMemberClick }: TeamOverviewProps)
         {/* Summary Stats */}
         <div className="mb-4 grid grid-cols-4 gap-2">
           {Object.entries(statusCounts).map(([key, count]) => {
-            const status = statusConfig[key as keyof typeof statusConfig];
+            const status = statusConfig[key as keyof typeof statusConfig] || statusConfig.absent;
             return (
               <div
                 key={key}
@@ -139,10 +151,11 @@ export function TeamOverview({ members = [], onMemberClick }: TeamOverviewProps)
           <div className="space-y-2">
             {members.map((member) => {
               // Determine actual status
-              const actualStatus = member.status === "available" && !member.todayAttendance?.checkIn
-                ? "offline"
-                : member.status;
-              const status = statusConfig[actualStatus];
+              const actualStatus = resolveStatusKey(
+                member.status,
+                Boolean(member.todayAttendance?.checkIn)
+              );
+              const status = statusConfig[actualStatus] || statusConfig.absent;
               const StatusIcon = status.icon;
 
               return (
