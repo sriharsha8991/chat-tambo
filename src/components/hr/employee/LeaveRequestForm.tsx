@@ -13,9 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar, Send, Info, CheckCircle2 } from "lucide-react";
+import { Calendar, Send, Info, CheckCircle2, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useTambo } from "@tambo-ai/react";
+import { useHRActions } from "@/hooks";
+import { useCurrentUser } from "@/contexts/PersonaContext";
 
 interface LeaveBalance {
   leaveType: string;
@@ -28,6 +29,7 @@ interface LeaveBalance {
 interface LeaveRequestFormProps {
   balances: LeaveBalance[];
   preselectedType?: string;
+  employeeId?: string;
   onSubmit?: (data: {
     leaveType: string;
     startDate: string;
@@ -40,6 +42,7 @@ interface LeaveRequestFormProps {
 export function LeaveRequestForm({
   balances = [],
   preselectedType,
+  employeeId,
   onSubmit,
   onCancel,
 }: LeaveRequestFormProps) {
@@ -47,12 +50,14 @@ export function LeaveRequestForm({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [successData, setSuccessData] = useState<{ requestId: string; daysRequested: number } | null>(null);
 
-  // Get Tambo context to send messages
-  const tambo = useTambo();
+  const currentUser = useCurrentUser();
+  const resolvedEmployeeId = employeeId || currentUser.employeeId;
+
+  // Use direct HR actions hook
+  const { applyLeave, isLoading } = useHRActions();
 
   const selectedBalance = balances?.find((b) => b.leaveType === leaveType);
 
@@ -68,7 +73,7 @@ export function LeaveRequestForm({
 
   const handleSubmit = async () => {
     setError(null);
-    setSuccess(false);
+    setSuccessData(null);
 
     if (!leaveType) {
       setError("Please select a leave type");
@@ -91,9 +96,8 @@ export function LeaveRequestForm({
       return;
     }
 
-    setIsSubmitting(true);
     try {
-      // If onSubmit callback is provided, use it
+      // If custom onSubmit callback is provided, use it
       if (onSubmit) {
         await onSubmit({
           leaveType,
@@ -101,24 +105,30 @@ export function LeaveRequestForm({
           endDate,
           reason: reason.trim(),
         });
-      } else if (tambo?.sendThreadMessage) {
-        // Otherwise, send a message to Tambo to process the request
-        const leaveLabel = selectedBalance?.label || leaveType;
-        const message = `Submit my leave request: ${leaveLabel} from ${startDate} to ${endDate} (${daysRequested} days). Reason: ${reason.trim()}`;
+        setSuccessData({ requestId: "custom", daysRequested });
+      } else {
+        // Direct tool call - no chat message needed!
+        const result = await applyLeave({
+          employeeId: resolvedEmployeeId,
+          leaveType,
+          startDate,
+          endDate,
+          reason: reason.trim(),
+        });
         
-        await tambo.sendThreadMessage(message, { streamResponse: true });
+        if (result.success && result.data) {
+          setSuccessData(result.data);
+          // Reset form after successful submission
+          setLeaveType("");
+          setStartDate("");
+          setEndDate("");
+          setReason("");
+        } else {
+          setError(result.error || "Failed to submit leave request. Please try again.");
+        }
       }
-      
-      setSuccess(true);
-      // Reset form after successful submission
-      setLeaveType("");
-      setStartDate("");
-      setEndDate("");
-      setReason("");
     } catch {
       setError("Failed to submit leave request. Please try again.");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -137,11 +147,15 @@ export function LeaveRequestForm({
           </Alert>
         )}
 
-        {success && (
-          <Alert className="border-green-200 bg-green-50">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              Leave request submitted successfully! Check the chat for confirmation.
+        {successData && (
+          <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/50">
+            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <AlertDescription className="text-green-800 dark:text-green-200">
+              <div className="space-y-1">
+                <p className="font-medium">✓ Leave request submitted successfully!</p>
+                <p className="text-sm">Request ID: {successData.requestId}</p>
+                <p className="text-sm">{successData.daysRequested} day(s) requested • Pending manager approval</p>
+              </div>
             </AlertDescription>
           </Alert>
         )}
@@ -219,17 +233,21 @@ export function LeaveRequestForm({
       </CardContent>
       <CardFooter className="flex gap-2">
         {onCancel && (
-          <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>
+          <Button variant="outline" onClick={onCancel} disabled={isLoading}>
             Cancel
           </Button>
         )}
         <Button
           className="flex-1"
           onClick={handleSubmit}
-          disabled={isSubmitting || !leaveType || !startDate || !endDate || !reason.trim()}
+          disabled={isLoading || !leaveType || !startDate || !endDate || !reason.trim() || !!successData}
         >
-          <Send className="mr-2 h-4 w-4" />
-          {isSubmitting ? "Submitting..." : "Submit Request"}
+          {isLoading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="mr-2 h-4 w-4" />
+          )}
+          {isLoading ? "Submitting..." : successData ? "Submitted ✓" : "Submit Request"}
         </Button>
       </CardFooter>
     </Card>

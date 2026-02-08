@@ -2,6 +2,8 @@
 export { StatusBadge } from "./shared/StatusBadge";
 export { LoadingCard, LoadingChart, LoadingListItem, LoadingStatCard } from "./shared/LoadingCard";
 export { EmptyState } from "./shared/EmptyState";
+export { AnnouncementsFeed } from "./shared/AnnouncementsFeed";
+export { DocumentsAcknowledgeList } from "./shared/DocumentsAcknowledgeList";
 
 // Employee components
 export {
@@ -24,4 +26,7 @@ export {
 export {
   SystemDashboard,
   PolicyViewer,
+  AnnouncementBoard,
+  DocumentCenter,
+  PolicyManager,
 } from "./admin";

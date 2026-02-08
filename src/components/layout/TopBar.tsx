@@ -12,8 +12,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, ChevronDown, Settings, User, Users, Shield } from "lucide-react";
+import { ChevronDown, Settings, User, Users, Shield } from "lucide-react";
 import type { PersonaRole } from "@/types/hr";
+import { NotifierBell } from "./NotifierBell";
 
 const personaConfig: Record<PersonaRole, { label: string; icon: React.ReactNode; color: string }> = {
   employee: {
@@ -34,7 +35,7 @@ const personaConfig: Record<PersonaRole, { label: string; icon: React.ReactNode;
 };
 
 export function TopBar() {
-  const { currentPersona, currentUser, setPersona, availablePersonas, userContext } = usePersona();
+  const { currentPersona, currentUser, setPersona, availablePersonas } = usePersona();
   const config = personaConfig[currentPersona];
 
   return (
@@ -61,14 +62,7 @@ export function TopBar() {
       {/* Right - Actions */}
       <div className="flex items-center gap-3">
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5 text-gray-600" />
-          {userContext.notifications > 0 && (
-            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-              {userContext.notifications}
-            </span>
-          )}
-        </Button>
+        <NotifierBell />
 
         {/* Persona Switcher */}
         <DropdownMenu>

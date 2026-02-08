@@ -30,6 +30,14 @@ interface PolicyViewerProps {
   policies: PolicyDocument[];
   searchQuery?: string;
   onSearch?: (query: string) => void;
+  isLoading?: boolean;
+  maxItems?: number;
+  density?: "compact" | "comfortable";
+  showSearch?: boolean;
+  emptyState?: {
+    title?: string;
+    description?: string;
+  };
 }
 
 const categoryConfig: Record<string, { icon: typeof FileText; color: string; bgColor: string }> = {
@@ -42,7 +50,12 @@ const categoryConfig: Record<string, { icon: typeof FileText; color: string; bgC
 export function PolicyViewer({ 
   policies = [], 
   searchQuery = "",
-  onSearch 
+  onSearch,
+  isLoading = false,
+  maxItems,
+  density = "comfortable",
+  showSearch = true,
+  emptyState,
 }: PolicyViewerProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery);
@@ -87,6 +100,10 @@ export function PolicyViewer({
       )
     : (policies || []);
 
+  const items = maxItems ? filteredPolicies.slice(0, maxItems) : filteredPolicies;
+  const paddingClass = density === "compact" ? "p-3" : "p-4";
+  const iconPaddingClass = density === "compact" ? "p-1.5" : "p-2";
+
   return (
     <Card className="w-full max-w-2xl">
       <CardHeader className="pb-3">
@@ -97,18 +114,20 @@ export function PolicyViewer({
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search policies (e.g., 'leave', 'regularization', 'WFH')..."
-            value={localSearch}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="pl-10"
-          />
-        </div>
+        {showSearch && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search policies (e.g., 'leave', 'regularization', 'WFH')..."
+              value={localSearch}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        )}
 
         {/* Results Count */}
-        {localSearch && (
+        {showSearch && localSearch && (
           <p className="text-sm text-muted-foreground">
             Found {filteredPolicies.length} {filteredPolicies.length === 1 ? "policy" : "policies"}
           </p>
@@ -117,16 +136,30 @@ export function PolicyViewer({
         {/* Policy List */}
         <ScrollArea className="max-h-[500px]">
           <div className="space-y-3">
-            {filteredPolicies.length === 0 ? (
+            {isLoading ? (
+              <div className="space-y-3">
+                {[...Array(3)].map((_, index) => (
+                  <div key={`loading-${index}`} className="rounded-lg border p-4">
+                    <div className="space-y-2 animate-pulse">
+                      <div className="h-4 w-1/3 rounded bg-muted" />
+                      <div className="h-3 w-full rounded bg-muted" />
+                      <div className="h-3 w-2/3 rounded bg-muted" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : items.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <FileText className="mb-2 h-12 w-12 text-muted-foreground/30" />
-                <p className="font-medium">No policies found</p>
+                <p className="font-medium">
+                  {emptyState?.title || "No policies found"}
+                </p>
                 <p className="text-sm text-muted-foreground">
-                  Try a different search term
+                  {emptyState?.description || "Try a different search term"}
                 </p>
               </div>
             ) : (
-              filteredPolicies.map((policy) => {
+              items.map((policy) => {
                 const category = categoryConfig[policy.category] || categoryConfig.general;
                 const CategoryIcon = category.icon;
                 const isExpanded = expandedId === policy.id;
@@ -137,10 +170,10 @@ export function PolicyViewer({
                     className="rounded-lg border transition-colors"
                   >
                     <button
-                      className="flex w-full items-start gap-3 p-4 text-left hover:bg-muted/50"
+                      className={cn("flex w-full items-start gap-3 text-left hover:bg-muted/50", paddingClass)}
                       onClick={() => setExpandedId(isExpanded ? null : policy.id)}
                     >
-                      <div className={cn("rounded-lg p-2 mt-0.5", category.bgColor)}>
+                      <div className={cn("rounded-lg mt-0.5", iconPaddingClass, category.bgColor)}>
                         <CategoryIcon className={cn("h-4 w-4", category.color)} />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -172,7 +205,7 @@ export function PolicyViewer({
                     {isExpanded && (
                       <>
                         <Separator />
-                        <div className="p-4 pt-3 bg-muted/30">
+                        <div className={cn("bg-muted/30", paddingClass)}>
                           <p className="text-sm whitespace-pre-wrap leading-relaxed">
                             {highlightText(policy.content, localSearch)}
                           </p>

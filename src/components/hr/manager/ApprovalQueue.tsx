@@ -17,7 +17,7 @@ import {
   Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTambo } from "@tambo-ai/react";
+import { useHRActions } from "@/hooks";
 
 interface ApprovalItem {
   id: string;
@@ -51,8 +51,12 @@ export function ApprovalQueue({
   onViewDetails,
 }: ApprovalQueueProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [loadingAction, setLoadingAction] = useState<"approve" | "reject" | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const tambo = useTambo();
+  const [processedIds, setProcessedIds] = useState<Set<string>>(new Set());
+  
+  // Use direct HR actions hook
+  const { approveRequest, rejectRequest } = useHRActions();
 
   const handleApprove = async (approval: ApprovalItem) => {
     if (onApprove) {
@@ -61,19 +65,24 @@ export function ApprovalQueue({
     }
     
     setLoadingId(approval.id);
+    setLoadingAction("approve");
     setMessage(null);
+    
     try {
-      if (tambo?.sendThreadMessage) {
-        await tambo.sendThreadMessage(
-          `Approve ${approval.employeeName}'s ${approval.type} request (ID: ${approval.id}): ${approval.title}`,
-          { streamResponse: true }
-        );
-        setMessage({ type: "success", text: `Approved ${approval.employeeName}'s request` });
+      // Direct tool call - no chat message needed!
+      const result = await approveRequest(approval.id, approval.type);
+      
+      if (result.success) {
+        setMessage({ type: "success", text: `✓ Approved ${approval.employeeName}'s ${approval.type} request` });
+        setProcessedIds(prev => new Set(prev).add(approval.id));
+      } else {
+        setMessage({ type: "error", text: result.error || "Failed to approve. Please try again." });
       }
     } catch {
       setMessage({ type: "error", text: "Failed to approve. Please try again." });
     } finally {
       setLoadingId(null);
+      setLoadingAction(null);
     }
   };
 
@@ -84,19 +93,24 @@ export function ApprovalQueue({
     }
     
     setLoadingId(approval.id);
+    setLoadingAction("reject");
     setMessage(null);
+    
     try {
-      if (tambo?.sendThreadMessage) {
-        await tambo.sendThreadMessage(
-          `Reject ${approval.employeeName}'s ${approval.type} request (ID: ${approval.id}): ${approval.title}`,
-          { streamResponse: true }
-        );
-        setMessage({ type: "success", text: `Rejected ${approval.employeeName}'s request` });
+      // Direct tool call - no chat message needed!
+      const result = await rejectRequest(approval.id, approval.type);
+      
+      if (result.success) {
+        setMessage({ type: "success", text: `✓ Rejected ${approval.employeeName}'s ${approval.type} request` });
+        setProcessedIds(prev => new Set(prev).add(approval.id));
+      } else {
+        setMessage({ type: "error", text: result.error || "Failed to reject. Please try again." });
       }
     } catch {
       setMessage({ type: "error", text: "Failed to reject. Please try again." });
     } finally {
       setLoadingId(null);
+      setLoadingAction(null);
     }
   };
 
@@ -161,8 +175,20 @@ export function ApprovalQueue({
         {/* Status Message */}
         {message && (
           <div className="px-6 pt-2">
-            <Alert variant={message.type === "error" ? "destructive" : "default"} className={message.type === "success" ? "border-green-200 bg-green-50 text-green-800" : ""}>
-              <AlertDescription>{message.text}</AlertDescription>
+            <Alert 
+              variant={message.type === "error" ? "destructive" : "default"} 
+              className={cn(
+                message.type === "success" && "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/50"
+              )}
+            >
+              {message.type === "success" ? (
+                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
+              <AlertDescription className={message.type === "success" ? "text-green-800 dark:text-green-200" : ""}>
+                {message.text}
+              </AlertDescription>
             </Alert>
           </div>
         )}
@@ -174,7 +200,7 @@ export function ApprovalQueue({
 
               return (
                 <div
-                  key={approval.id}
+                  key={`${approval.type}-${approval.id}`}
                   className={cn(
                     "rounded-lg border p-3 transition-colors hover:bg-muted/50",
                     approval.priority === "urgent" && "border-red-200 bg-red-50/50"
@@ -213,33 +239,41 @@ export function ApprovalQueue({
                     </Button>
                   </div>
                   <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleApprove(approval)}
-                      disabled={loadingId === approval.id}
-                    >
-                      {loadingId === approval.id ? (
-                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="mr-1 h-4 w-4" />
-                      )}
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => handleReject(approval)}
-                      disabled={loadingId === approval.id}
-                    >
-                      {loadingId === approval.id ? (
-                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                      ) : (
-                        <XCircle className="mr-1 h-4 w-4" />
-                      )}
-                      Reject
-                    </Button>
+                    {processedIds.has(approval.id) ? (
+                      <div className="w-full text-center py-1.5">
+                        <span className="text-sm text-green-600 dark:text-green-400 font-medium">✓ Processed</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleApprove(approval)}
+                          disabled={loadingId === approval.id}
+                        >
+                          {loadingId === approval.id && loadingAction === "approve" ? (
+                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="mr-1 h-4 w-4" />
+                          )}
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => handleReject(approval)}
+                          disabled={loadingId === approval.id}
+                        >
+                          {loadingId === approval.id && loadingAction === "reject" ? (
+                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                          ) : (
+                            <XCircle className="mr-1 h-4 w-4" />
+                          )}
+                          Reject
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               );

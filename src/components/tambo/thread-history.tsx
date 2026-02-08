@@ -509,7 +509,7 @@ const ThreadHistoryList = React.forwardRef<
       <div className="space-y-1">
         {filteredThreads.map((thread: TamboThread) => (
           <div
-            key={thread.id}
+            key={`${thread.id}-${thread.createdAt}`}
             onClick={async () => await handleSwitchThread(thread.id)}
             className={cn(
               "p-2 rounded-md hover:bg-backdrop cursor-pointer group flex items-center justify-between",

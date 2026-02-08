@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { usePersona, useUserContext } from "@/contexts/PersonaContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,8 +12,10 @@ import {
   CheckCircle, 
   FileText,
   TrendingUp,
-  Bell
+  Bell,
+  RefreshCw
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { PersonaRole } from "@/types/hr";
 
 // Import HR Components
@@ -26,9 +28,14 @@ import {
   TeamOverview,
   SystemDashboard,
   PolicyViewer,
+  AnnouncementsFeed,
+  DocumentsAcknowledgeList,
+  AnnouncementBoard,
+  DocumentCenter,
+  PolicyManager,
 } from "@/components/hr";
 
-// Import mock data services
+// Import API client (uses fetch, works in browser)
 import {
   getAttendanceStatus,
   getLeaveBalance,
@@ -36,8 +43,15 @@ import {
   getPendingApprovals,
   getTeamMembers,
   getSystemMetrics,
-  searchPolicies,
-} from "@/services/hr-data";
+  getPolicies,
+  getAnnouncements,
+  getDocuments,
+  getAcknowledgedDocumentIds,
+  acknowledgeDocument,
+} from "@/services/hr-api-client";
+
+// Import real-time hook for Supabase subscriptions
+import { useRealtimeHR } from "@/lib/use-realtime-hr";
 
 function ProactiveAlert({ type, title, message }: { type: "warning" | "info"; title: string; message: string }) {
   return (
@@ -61,31 +75,75 @@ function EmployeeDashboard() {
   const [leaveBalances, setLeaveBalances] = useState<Awaited<ReturnType<typeof getLeaveBalance>>>([]);
   const [requests, setRequests] = useState<Awaited<ReturnType<typeof getRequestStatus>>>([]);
   const [attendance, setAttendance] = useState<Awaited<ReturnType<typeof getAttendanceStatus>> | null>(null);
+  const [announcements, setAnnouncements] = useState<Awaited<ReturnType<typeof getAnnouncements>>>([]);
+  const [documents, setDocuments] = useState<Awaited<ReturnType<typeof getDocuments>>>([]);
+  const [acknowledgedIds, setAcknowledgedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchData = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setIsRefreshing(true);
+    else setIsLoading(true);
+    
+    try {
+      const [balances, reqs, att, ann, docs, ackIds] = await Promise.all([
+        getLeaveBalance({ employeeId: currentUser.employeeId }),
+        getRequestStatus({ employeeId: currentUser.employeeId }),
+        getAttendanceStatus({ employeeId: currentUser.employeeId }),
+        getAnnouncements({ role: currentUser.role }),
+        getDocuments({ role: currentUser.role }),
+        getAcknowledgedDocumentIds({ employeeId: currentUser.employeeId }),
+      ]);
+      setLeaveBalances(balances);
+      setRequests(reqs);
+      setAttendance(att);
+      setAnnouncements(ann);
+      setDocuments(docs);
+      setAcknowledgedIds(ackIds);
+    } catch (error) {
+      console.error("Failed to fetch employee data:", error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [currentUser.employeeId, currentUser.role]);
+
+  // Real-time subscriptions for Supabase
+  useRealtimeHR({
+    employeeId: currentUser.employeeId,
+    onLeaveRequestChange: () => fetchData(true),
+    onAttendanceChange: () => fetchData(true),
+    onNotificationChange: () => fetchData(true),
+  });
 
   useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const [balances, reqs, att] = await Promise.all([
-          getLeaveBalance({ employeeId: currentUser.id }),
-          getRequestStatus({ employeeId: currentUser.id }),
-          getAttendanceStatus({ employeeId: currentUser.id }),
-        ]);
-        setLeaveBalances(balances);
-        setRequests(reqs);
-        setAttendance(att);
-      } catch (error) {
-        console.error("Failed to fetch employee data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
     fetchData();
-  }, [currentUser.id]);
+    
+    // Auto-refresh when window gains focus
+    const handleFocus = () => fetchData(true);
+    window.addEventListener("focus", handleFocus);
+    
+    // Listen for custom refresh event (from chat actions)
+    const handleRefresh = () => fetchData(true);
+    window.addEventListener("hr-data-updated", handleRefresh);
+    
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("hr-data-updated", handleRefresh);
+    };
+  }, [fetchData]);
 
   const totalLeaveRemaining = leaveBalances.reduce((sum, b) => sum + b.remainingDays, 0);
   const pendingCount = requests.filter(r => r.status === "pending").length;
+
+  const handleAcknowledge = async (documentId: string) => {
+    try {
+      await acknowledgeDocument({ employeeId: currentUser.employeeId, documentId });
+      setAcknowledgedIds((prev) => [...new Set([...prev, documentId])]);
+    } catch (error) {
+      console.error("Failed to acknowledge document:", error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -170,6 +228,7 @@ function EmployeeDashboard() {
             attendance?.todayStatus.checkOutTime ? "checked_out" :
             attendance?.todayStatus.isCheckedIn ? "checked_in" : "not_checked_in"
           }
+          employeeId={currentUser.employeeId}
           isLoading={isLoading}
         />
         <AttendanceTimeline
@@ -190,6 +249,32 @@ function EmployeeDashboard() {
           maxHeight={350}
         />
       </div>
+
+      <div className="grid grid-cols-2 gap-6">
+        <AnnouncementsFeed
+          announcements={announcements}
+          isLoading={isLoading}
+          maxItems={6}
+          density="comfortable"
+          emptyState={{
+            title: "No announcements yet",
+            description: "HR updates will appear here once published.",
+          }}
+        />
+        <DocumentsAcknowledgeList
+          documents={documents}
+          acknowledgedIds={acknowledgedIds}
+          onAcknowledge={handleAcknowledge}
+          isLoading={isLoading}
+          maxItems={6}
+          density="comfortable"
+          showAcknowledge
+          emptyState={{
+            title: "No documents available",
+            description: "Required reads and guides will show up here.",
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -201,26 +286,61 @@ function ManagerDashboard() {
   
   const [approvals, setApprovals] = useState<Awaited<ReturnType<typeof getPendingApprovals>>>([]);
   const [teamMembers, setTeamMembers] = useState<Awaited<ReturnType<typeof getTeamMembers>>>([]);
+  const [announcements, setAnnouncements] = useState<Awaited<ReturnType<typeof getAnnouncements>>>([]);
+  const [documents, setDocuments] = useState<Awaited<ReturnType<typeof getDocuments>>>([]);
+  const [acknowledgedIds, setAcknowledgedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchData = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setIsRefreshing(true);
+    else setIsLoading(true);
+    
+    try {
+      const [apprs, team, ann, docs, ackIds] = await Promise.all([
+        getPendingApprovals({ managerId: currentUser.employeeId }),
+        getTeamMembers({ managerId: currentUser.employeeId }),
+        getAnnouncements({ role: currentUser.role }),
+        getDocuments({ role: currentUser.role }),
+        getAcknowledgedDocumentIds({ employeeId: currentUser.employeeId }),
+      ]);
+      setApprovals(apprs);
+      setTeamMembers(team);
+      setAnnouncements(ann);
+      setDocuments(docs);
+      setAcknowledgedIds(ackIds);
+    } catch (error) {
+      console.error("Failed to fetch manager data:", error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [currentUser.employeeId, currentUser.role]);
+
+  // Real-time subscriptions for Supabase - Manager sees updates instantly
+  useRealtimeHR({
+    managerId: currentUser.employeeId,
+    onLeaveRequestChange: () => fetchData(true),
+    onRegularizationChange: () => fetchData(true),
+    onNotificationChange: () => fetchData(true),
+  });
 
   useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const [apprs, team] = await Promise.all([
-          getPendingApprovals({ managerId: currentUser.id }),
-          getTeamMembers({ managerId: currentUser.id }),
-        ]);
-        setApprovals(apprs);
-        setTeamMembers(team);
-      } catch (error) {
-        console.error("Failed to fetch manager data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
     fetchData();
-  }, [currentUser.id]);
+    
+    // Auto-refresh when window gains focus
+    const handleFocus = () => fetchData(true);
+    window.addEventListener("focus", handleFocus);
+    
+    // Listen for custom refresh event (from chat actions)
+    const handleRefresh = () => fetchData(true);
+    window.addEventListener("hr-data-updated", handleRefresh);
+    
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("hr-data-updated", handleRefresh);
+    };
+  }, [fetchData]);
 
   const presentCount = teamMembers.filter(m => m.status === "available" && m.todayAttendance?.checkIn).length;
   const wfhCount = teamMembers.filter(m => m.status === "wfh").length;
@@ -228,6 +348,15 @@ function ManagerDashboard() {
   const attendanceRate = teamMembers.length > 0 
     ? Math.round(((presentCount + wfhCount) / teamMembers.length) * 100)
     : 0;
+
+  const handleAcknowledge = async (documentId: string) => {
+    try {
+      await acknowledgeDocument({ employeeId: currentUser.employeeId, documentId });
+      setAcknowledgedIds((prev) => [...new Set([...prev, documentId])]);
+    } catch (error) {
+      console.error("Failed to acknowledge document:", error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -293,19 +422,35 @@ function ManagerDashboard() {
 
       {/* Main Components Grid */}
       <div className="grid grid-cols-2 gap-6">
-        <ApprovalQueue
-          approvals={approvals}
-          onApprove={(id) => {
-            console.log("Approve:", id);
-            setApprovals(prev => prev.filter(a => a.id !== id));
-          }}
-          onReject={(id) => {
-            console.log("Reject:", id);
-            setApprovals(prev => prev.filter(a => a.id !== id));
-          }}
-        />
+        <ApprovalQueue approvals={approvals} />
         <TeamOverview
           members={teamMembers}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-6">
+        <AnnouncementsFeed
+          announcements={announcements}
+          isLoading={isLoading}
+          maxItems={6}
+          density="comfortable"
+          emptyState={{
+            title: "No announcements yet",
+            description: "HR updates will appear here once published.",
+          }}
+        />
+        <DocumentsAcknowledgeList
+          documents={documents}
+          acknowledgedIds={acknowledgedIds}
+          onAcknowledge={handleAcknowledge}
+          isLoading={isLoading}
+          maxItems={6}
+          density="comfortable"
+          showAcknowledge
+          emptyState={{
+            title: "No documents available",
+            description: "Required reads and guides will show up here.",
+          }}
         />
       </div>
     </div>
@@ -314,30 +459,60 @@ function ManagerDashboard() {
 
 // HR Dashboard
 function HRDashboard() {
-  const { userContext } = useUserContext();
-  
   const [metrics, setMetrics] = useState<Awaited<ReturnType<typeof getSystemMetrics>> | null>(null);
-  const [policies, setPolicies] = useState<Awaited<ReturnType<typeof searchPolicies>>>([]);
+  const [policies, setPolicies] = useState<Awaited<ReturnType<typeof getPolicies>>>([]);
+  const [announcements, setAnnouncements] = useState<Awaited<ReturnType<typeof getAnnouncements>>>([]);
+  const [documents, setDocuments] = useState<Awaited<ReturnType<typeof getDocuments>>>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchData = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setIsRefreshing(true);
+    else setIsLoading(true);
+    
+    try {
+      const [systemMetrics, allPolicies, allAnnouncements, allDocuments] = await Promise.all([
+        getSystemMetrics(),
+        getPolicies(),
+        getAnnouncements({}),
+        getDocuments({}),
+      ]);
+      setMetrics(systemMetrics);
+      setPolicies(allPolicies);
+      setAnnouncements(allAnnouncements);
+      setDocuments(allDocuments);
+    } catch (error) {
+      console.error("Failed to fetch HR data:", error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  // Real-time subscriptions for Supabase - HR sees all updates
+  useRealtimeHR({
+    onLeaveRequestChange: () => fetchData(true),
+    onRegularizationChange: () => fetchData(true),
+    onAttendanceChange: () => fetchData(true),
+    onNotificationChange: () => fetchData(true),
+  });
 
   useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const [systemMetrics, allPolicies] = await Promise.all([
-          getSystemMetrics(),
-          searchPolicies({ query: "" }),
-        ]);
-        setMetrics(systemMetrics);
-        setPolicies(allPolicies);
-      } catch (error) {
-        console.error("Failed to fetch HR data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
     fetchData();
-  }, []);
+    
+    // Auto-refresh when window gains focus
+    const handleFocus = () => fetchData(true);
+    window.addEventListener("focus", handleFocus);
+    
+    // Listen for custom refresh event (from chat actions)
+    const handleRefresh = () => fetchData(true);
+    window.addEventListener("hr-data-updated", handleRefresh);
+    
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("hr-data-updated", handleRefresh);
+    };
+  }, [fetchData]);
 
   return (
     <div className="space-y-6">
@@ -406,11 +581,54 @@ function HRDashboard() {
         {metrics && (
           <SystemDashboard metrics={metrics} />
         )}
+        <div className="grid grid-cols-2 gap-6">
+          <AnnouncementBoard
+            announcements={announcements}
+            onRefresh={() => fetchData(true)}
+            isLoading={isLoading}
+            maxItems={8}
+            canPost
+            canDelete
+            emptyState={{
+              title: "No announcements yet",
+              description: "Post your first update for the organization.",
+            }}
+          />
+          <DocumentCenter
+            documents={documents}
+            onRefresh={() => fetchData(true)}
+            isLoading={isLoading}
+            maxItems={8}
+            canUpload
+            canDelete
+            emptyState={{
+              title: "No documents uploaded yet",
+              description: "Upload a PDF to start collecting acknowledgments.",
+            }}
+          />
+        </div>
+        <PolicyManager
+          policies={policies}
+          onRefresh={() => fetchData(true)}
+          isLoading={isLoading}
+          maxItems={8}
+          canCreate
+          canEdit
+          canDelete
+          emptyState={{
+            title: "No policies created yet",
+            description: "Create policies to make them visible to the team.",
+          }}
+        />
         <PolicyViewer
           policies={policies}
-          onSearch={async (query) => {
-            const results = await searchPolicies({ query });
-            setPolicies(results);
+          isLoading={isLoading}
+          showSearch={false}
+          maxItems={10}
+          density="comfortable"
+          emptyState={{
+            title: "No policies found",
+            description: "Create policies to show them here.",
           }}
         />
       </div>

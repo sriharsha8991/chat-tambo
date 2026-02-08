@@ -1,39 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
 import type { PersonaRole, UserProfile, UserContext } from "@/types/hr";
-
-// Mock users for each persona
-const MOCK_USERS: Record<PersonaRole, UserProfile> = {
-  employee: {
-    id: "emp-001",
-    employeeId: "ZP-1001",
-    name: "Priya Sharma",
-    email: "priya.sharma@company.com",
-    role: "employee",
-    department: "Engineering",
-    managerId: "mgr-001",
-    avatarUrl: undefined,
-  },
-  manager: {
-    id: "mgr-001",
-    employeeId: "ZP-0501",
-    name: "Rajesh Kumar",
-    email: "rajesh.kumar@company.com",
-    role: "manager",
-    department: "Engineering",
-    avatarUrl: undefined,
-  },
-  hr: {
-    id: "hr-001",
-    employeeId: "ZP-0101",
-    name: "Ananya Patel",
-    email: "ananya.patel@company.com",
-    role: "hr",
-    department: "Human Resources",
-    avatarUrl: undefined,
-  },
-};
+import { getAllEmployees } from "@/services/hr-api-client";
 
 interface PersonaContextValue {
   // Current persona and user
@@ -61,7 +30,6 @@ const getInitialUserContext = (user: UserProfile): UserContext => {
   const hour = now.getHours();
   const isWorkingHours = hour >= 9 && hour < 18;
   
-  // Simulate different states for demo
   const baseContext: UserContext = {
     user,
     isCheckedInToday: false,
@@ -73,81 +41,99 @@ const getInitialUserContext = (user: UserProfile): UserContext => {
     notifications: 0,
   };
   
-  // Add role-specific mock state
-  switch (user.role) {
-    case "employee":
-      return {
-        ...baseContext,
-        // Simulate: employee forgot to checkout yesterday
-        hasMissedCheckout: true,
-        missedCheckoutDate: new Date(Date.now() - 86400000).toISOString().split("T")[0],
-        isCheckedInToday: false,
-        pendingRequests: [
-          {
-            id: "req-001",
-            type: "leave",
-            title: "Casual Leave - Feb 10",
-            submittedAt: "2026-02-03T10:00:00Z",
-            status: "pending",
-            details: "Family function",
-          },
-        ],
-        notifications: 2,
-      };
-      
-    case "manager":
-      return {
-        ...baseContext,
-        isCheckedInToday: true,
-        pendingApprovals: 5,
-        notifications: 5,
-      };
-      
-    case "hr":
-      return {
-        ...baseContext,
-        isCheckedInToday: true,
-        escalations: 3,
-        pendingApprovals: 12,
-        notifications: 8,
-      };
-      
-    default:
-      return baseContext;
-  }
+  return baseContext;
 };
 
 export function PersonaProvider({ children }: { children: React.ReactNode }) {
   const [currentPersona, setCurrentPersona] = useState<PersonaRole>("employee");
-  const [userContextState, setUserContextState] = useState<UserContext>(() => 
-    getInitialUserContext(MOCK_USERS.employee)
-  );
-  
-  const currentUser = MOCK_USERS[currentPersona];
-  
+  const [usersByRole, setUsersByRole] = useState<Record<PersonaRole, UserProfile | null>>({
+    employee: null,
+    manager: null,
+    hr: null,
+  });
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [userContextState, setUserContextState] = useState<UserContext | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadUsers = async () => {
+      try {
+        const employees = await getAllEmployees();
+        const mapped = employees.map((employee) => ({
+          id: employee.id,
+          employeeId: employee.employeeId || employee.employee_id || employee.id,
+          name: employee.name,
+          email: employee.email,
+          role: employee.role,
+          department: employee.department,
+          managerId: employee.managerId || employee.manager_id || undefined,
+          avatarUrl: undefined,
+        }));
+
+        const nextUsers: Record<PersonaRole, UserProfile | null> = {
+          employee: mapped.find((user) => user.role === "employee") || null,
+          manager: mapped.find((user) => user.role === "manager") || null,
+          hr: mapped.find((user) => user.role === "hr") || null,
+        };
+
+        if (isMounted) {
+          setUsersByRole(nextUsers);
+          const initialUser = nextUsers[currentPersona] || mapped[0] || null;
+          setCurrentUser(initialUser);
+          setUserContextState(initialUser ? getInitialUserContext(initialUser) : null);
+        }
+      } catch (error) {
+        console.error("Failed to load personas:", error);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    void loadUsers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentPersona]);
+
   const setPersona = useCallback((persona: PersonaRole) => {
     setCurrentPersona(persona);
-    setUserContextState(getInitialUserContext(MOCK_USERS[persona]));
-  }, []);
+    const nextUser = usersByRole[persona];
+    if (nextUser) {
+      setCurrentUser(nextUser);
+      setUserContextState(getInitialUserContext(nextUser));
+    }
+  }, [usersByRole]);
   
   const updateUserContext = useCallback((updates: Partial<UserContext>) => {
-    setUserContextState(prev => ({ ...prev, ...updates }));
+    setUserContextState((prev) => (prev ? { ...prev, ...updates } : prev));
   }, []);
   
-  const value = useMemo<PersonaContextValue>(() => ({
-    currentPersona,
-    currentUser,
-    setPersona,
-    userContext: userContextState,
-    updateUserContext,
-    availablePersonas: ["employee", "manager", "hr"],
-  }), [currentPersona, currentUser, setPersona, userContextState, updateUserContext]);
-  
-  return (
-    <PersonaContext.Provider value={value}>
-      {children}
-    </PersonaContext.Provider>
-  );
+  const availablePersonas = useMemo<PersonaRole[]>(() => {
+    const personaList: PersonaRole[] = ["employee", "manager", "hr"];
+    return personaList.filter((persona) => Boolean(usersByRole[persona]));
+  }, [usersByRole]);
+
+  const value = useMemo<PersonaContextValue | null>(() => {
+    if (!currentUser || !userContextState) return null;
+
+    return {
+      currentPersona,
+      currentUser,
+      setPersona,
+      userContext: userContextState,
+      updateUserContext,
+      availablePersonas,
+    };
+  }, [currentPersona, currentUser, setPersona, userContextState, updateUserContext, availablePersonas]);
+
+  if (isLoading || !value) {
+    return <div className="p-6 text-sm text-muted-foreground">Loading personas...</div>;
+  }
+
+  return <PersonaContext.Provider value={value}>{children}</PersonaContext.Provider>;
 }
 
 export function usePersona() {

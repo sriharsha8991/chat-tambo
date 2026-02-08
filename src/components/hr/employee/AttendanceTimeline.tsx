@@ -96,7 +96,7 @@ export function AttendanceTimeline({ records = [], maxItems = 7 }: AttendanceTim
               const status = statusConfig[record.status] || statusConfig.present;
 
               return (
-                <div key={record.date} className="relative pl-8 pb-4">
+                <div key={`${record.date}-${index}`} className="relative pl-8 pb-4">
                   {/* Timeline dot */}
                   <div
                     className={cn(

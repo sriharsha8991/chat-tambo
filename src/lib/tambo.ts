@@ -19,6 +19,11 @@ import {
   ApprovalDetail,
   SystemDashboard,
   PolicyViewer,
+  AnnouncementsFeed,
+  DocumentsAcknowledgeList,
+  AnnouncementBoard,
+  DocumentCenter,
+  PolicyManager,
 } from "@/components/hr";
 import {
   getAttendanceStatus,
@@ -29,7 +34,11 @@ import {
   getPendingApprovals,
   processApproval,
   searchPolicies,
-} from "@/services/hr-data";
+  getAttendanceTrends,
+  getLeaveAnalytics,
+  getTeamMetrics,
+  getHRAnalytics,
+} from "@/services/hr-api-client";
 import type { TamboComponent } from "@tambo-ai/react";
 import { TamboTool } from "@tambo-ai/react";
 import { z } from "zod";
@@ -186,6 +195,7 @@ export const tools: TamboTool[] = [
     tool: processApproval,
     inputSchema: z.object({
       approvalId: z.string().describe("ID of the approval item"),
+      type: z.enum(["leave", "regularization", "wfh"]).optional().describe("Type of approval when known"),
       action: z.enum(["approve", "reject"]).describe("Whether to approve or reject"),
       comment: z.string().optional().describe("Optional comment for the decision"),
     }),
@@ -212,6 +222,92 @@ export const tools: TamboTool[] = [
       content: z.string(),
       lastUpdated: z.string(),
     })),
+  },
+
+  // Analytics Tools
+  {
+    name: "getAttendanceTrends",
+    description: 
+      "Get attendance trends data for visualizing in charts. Use when user asks about " +
+      "attendance patterns, trends, or wants to see attendance data over time. " +
+      "Returns data formatted for bar/line charts.",
+    tool: getAttendanceTrends,
+    inputSchema: z.object({
+      period: z.enum(["week", "month"]).optional().describe("Time period for trends (week or month)"),
+      employeeId: z.string().optional().describe("Filter by employee ID"),
+      department: z.string().optional().describe("Filter by department"),
+    }),
+    outputSchema: z.object({
+      labels: z.array(z.string()),
+      datasets: z.array(z.object({
+        label: z.string(),
+        data: z.array(z.number()),
+        color: z.string().optional(),
+      })),
+    }),
+  },
+  {
+    name: "getLeaveAnalytics",
+    description: 
+      "Get leave analytics data for charts. Use when user asks about leave patterns, " +
+      "distribution of leave types, or leave usage trends. Use type='distribution' for " +
+      "pie charts showing leave type breakdown, type='usage' for line charts showing usage over time.",
+    tool: getLeaveAnalytics,
+    inputSchema: z.object({
+      type: z.enum(["distribution", "usage"]).optional().describe("Type of analytics - distribution (pie) or usage (line)"),
+      employeeId: z.string().optional().describe("Filter by employee ID"),
+      department: z.string().optional().describe("Filter by department"),
+    }),
+    outputSchema: z.object({
+      labels: z.array(z.string()),
+      datasets: z.array(z.object({
+        label: z.string(),
+        data: z.array(z.number()),
+        color: z.string().optional(),
+      })),
+    }),
+  },
+  {
+    name: "getTeamMetrics",
+    description: 
+      "Get team performance metrics for managers. Use when manager asks about team " +
+      "attendance, team status breakdown, or team leave usage. " +
+      "metric='status' for current team status, metric='attendance' for attendance comparison, " +
+      "metric='leave' for leave usage comparison.",
+    tool: getTeamMetrics,
+    inputSchema: z.object({
+      managerId: z.string().optional().describe("Manager's employee ID"),
+      metric: z.enum(["attendance", "leave", "status"]).optional().describe("Type of metric to fetch"),
+    }),
+    outputSchema: z.object({
+      labels: z.array(z.string()),
+      datasets: z.array(z.object({
+        label: z.string(),
+        data: z.array(z.number()),
+        color: z.string().optional(),
+      })),
+    }),
+  },
+  {
+    name: "getHRAnalytics",
+    description: 
+      "Get organization-wide HR analytics for HR admins. Use when HR asks about " +
+      "department distribution, headcount trends, or turnover rates. " +
+      "metric='departmentDistribution' for pie chart, metric='headcount' for trend line, " +
+      "metric='turnover' for turnover rates.",
+    tool: getHRAnalytics,
+    inputSchema: z.object({
+      metric: z.enum(["headcount", "turnover", "departmentDistribution"]).optional()
+        .describe("Type of HR metric to fetch"),
+    }),
+    outputSchema: z.object({
+      labels: z.array(z.string()),
+      datasets: z.array(z.object({
+        label: z.string(),
+        data: z.array(z.number()),
+        color: z.string().optional(),
+      })),
+    }),
   },
 ];
 
@@ -436,6 +532,143 @@ export const components: TamboComponent[] = [
         lastUpdated: z.string().describe("Last update date"),
       })).describe("Array of policies to display"),
       searchQuery: z.string().optional().describe("Pre-filled search query"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      density: z.enum(["compact", "comfortable"]).optional().describe("Visual density"),
+      showSearch: z.boolean().optional().describe("Show search input"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
+    }),
+  },
+  {
+    name: "AnnouncementsFeed",
+    description:
+      "A feed of HR announcements with pinned items. Use when users ask for latest HR updates.",
+    component: AnnouncementsFeed,
+    propsSchema: z.object({
+      announcements: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        content: z.string(),
+        audienceRole: z.string(),
+        pinned: z.boolean(),
+        createdAt: z.string(),
+        expiresAt: z.string().nullable().optional(),
+      })).describe("Announcements to display"),
+      title: z.string().optional().describe("Optional heading"),
+      maxHeight: z.number().optional().describe("Scroll container height"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      density: z.enum(["compact", "comfortable"]).optional().describe("Visual density"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
+    }),
+  },
+  {
+    name: "DocumentsAcknowledgeList",
+    description:
+      "A list of documents with optional acknowledgment actions. Use when showing required reads.",
+    component: DocumentsAcknowledgeList,
+    propsSchema: z.object({
+      documents: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        description: z.string().nullable().optional(),
+        filePath: z.string(),
+        audienceRole: z.string(),
+        requiresAck: z.boolean(),
+        createdAt: z.string(),
+        expiresAt: z.string().nullable().optional(),
+      })).describe("Documents to display"),
+      acknowledgedIds: z.array(z.string()).describe("Document IDs already acknowledged"),
+      title: z.string().optional().describe("Optional heading"),
+      maxHeight: z.number().optional().describe("Scroll container height"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      density: z.enum(["compact", "comfortable"]).optional().describe("Visual density"),
+      showAcknowledge: z.boolean().optional().describe("Show acknowledge buttons"),
+      hideAcknowledged: z.boolean().optional().describe("Hide acknowledged documents"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
+    }),
+  },
+  {
+    name: "AnnouncementBoard",
+    description:
+      "HR admin board for creating and managing announcements.",
+    component: AnnouncementBoard,
+    propsSchema: z.object({
+      announcements: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        content: z.string(),
+        audienceRole: z.string(),
+        pinned: z.boolean(),
+        createdAt: z.string(),
+      })).describe("Announcements to manage"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      canPost: z.boolean().optional().describe("Show announcement form"),
+      canDelete: z.boolean().optional().describe("Allow delete"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
+    }),
+  },
+  {
+    name: "DocumentCenter",
+    description:
+      "HR admin document center for uploading PDFs and managing document list.",
+    component: DocumentCenter,
+    propsSchema: z.object({
+      documents: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        description: z.string().nullable().optional(),
+        filePath: z.string(),
+        audienceRole: z.string(),
+        requiresAck: z.boolean(),
+        createdAt: z.string(),
+      })).describe("Documents to manage"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      canUpload: z.boolean().optional().describe("Show upload form"),
+      canDelete: z.boolean().optional().describe("Allow delete"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
+    }),
+  },
+  {
+    name: "PolicyManager",
+    description:
+      "HR admin policy manager for creating, editing, and deleting policies.",
+    component: PolicyManager,
+    propsSchema: z.object({
+      policies: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        category: z.string(),
+        content: z.string(),
+        lastUpdated: z.string(),
+      })).describe("Policies to manage"),
+      isLoading: z.boolean().optional().describe("Show loading state"),
+      maxItems: z.number().optional().describe("Maximum items to display"),
+      canCreate: z.boolean().optional().describe("Show create form"),
+      canEdit: z.boolean().optional().describe("Allow edit"),
+      canDelete: z.boolean().optional().describe("Allow delete"),
+      emptyState: z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }).optional().describe("Empty state copy"),
     }),
   },
 ];
@@ -455,3 +688,90 @@ export const contextHelpers = {
     };
   },
 };
+
+// ============================================
+// PERSONA-SPECIFIC SUGGESTIONS
+// ============================================
+
+export type PersonaRole = "employee" | "manager" | "hr";
+
+export interface StarterSuggestion {
+  id: string;
+  title: string;
+  detailedSuggestion: string;
+  icon?: string;
+}
+
+export const personaSuggestions: Record<PersonaRole, StarterSuggestion[]> = {
+  employee: [
+    {
+      id: "emp-1",
+      title: "🕐 Check In/Out",
+      detailedSuggestion: "Check me in for today",
+    },
+    {
+      id: "emp-2",
+      title: "📅 Leave Balance",
+      detailedSuggestion: "Show my leave balance",
+    },
+    {
+      id: "emp-3",
+      title: "📝 Apply Leave",
+      detailedSuggestion: "I want to apply for leave",
+    },
+    {
+      id: "emp-4",
+      title: "📊 My Attendance Trends",
+      detailedSuggestion: "Show my attendance trends for this month",
+    },
+  ],
+  manager: [
+    {
+      id: "mgr-1",
+      title: "📋 Pending Approvals",
+      detailedSuggestion: "Show my pending approvals",
+    },
+    {
+      id: "mgr-2",
+      title: "👥 Team Status",
+      detailedSuggestion: "Show my team's attendance today",
+    },
+    {
+      id: "mgr-3",
+      title: "📊 Team Analytics",
+      detailedSuggestion: "Show my team's attendance trends chart",
+    },
+    {
+      id: "mgr-4",
+      title: "📈 Leave Analytics",
+      detailedSuggestion: "Show team leave distribution chart",
+    },
+  ],
+  hr: [
+    {
+      id: "hr-1",
+      title: "📊 HR Analytics",
+      detailedSuggestion: "Show organization headcount by department chart",
+    },
+    {
+      id: "hr-2",
+      title: "📋 All Approvals",
+      detailedSuggestion: "Show all pending approvals across the organization",
+    },
+    {
+      id: "hr-3",
+      title: "📈 Org Metrics",
+      detailedSuggestion: "Show organization turnover and attrition trends",
+    },
+    {
+      id: "hr-4",
+      title: "📜 Policy Search",
+      detailedSuggestion: "Show me the leave policy",
+    },
+  ],
+};
+
+// Helper to get suggestions for a persona
+export function getSuggestionsForPersona(persona: PersonaRole): StarterSuggestion[] {
+  return personaSuggestions[persona] || personaSuggestions.employee;
+}
