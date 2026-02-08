@@ -9,3 +9,4 @@ export {
 } from "./LoadingCard";
 
 export { EmptyState } from "./EmptyState";
+export { SalarySlipForm } from "./SalarySlipForm";

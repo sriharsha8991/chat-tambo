@@ -75,6 +75,12 @@ const hrComponents: ComponentItem[] = [
     icon: <CheckSquare className="h-4 w-4" />,
     category: "employee",
   },
+  {
+    name: "Salary Slip",
+    description: "Download monthly salary slips",
+    icon: <FileText className="h-4 w-4" />,
+    category: "employee",
+  },
 
   // Manager Components
   {

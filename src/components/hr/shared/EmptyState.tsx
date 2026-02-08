@@ -81,7 +81,7 @@ export function EmptyState({
   className,
   size = "default",
 }: EmptyStateProps) {
-  const config = emptyStateConfig[type];
+  const config = emptyStateConfig[type] || emptyStateConfig.generic;
   const Icon = icon || config.icon;
   const displayTitle = title || config.title;
   const displayDescription = description || config.description;

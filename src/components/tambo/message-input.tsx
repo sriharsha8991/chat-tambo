@@ -506,11 +506,44 @@ const MessageInputInternal = React.forwardRef<
 
       const imageIdsAtSubmitTime = images.map((image) => image.id);
 
-      try {
+      let submitError: unknown | null = null;
+
+      const trySubmit = async (streamResponse: boolean) => {
         await submit({
-          streamResponse: true,
+          streamResponse,
           resourceNames: latestResourceNames,
         });
+      };
+
+      try {
+        await trySubmit(true);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.toLowerCase().includes("stream")) {
+          try {
+            await trySubmit(false);
+          } catch (retryError) {
+            submitError = retryError;
+          }
+        } else {
+          submitError = error;
+        }
+      }
+
+      if (submitError) {
+        console.error("Failed to submit message:", submitError);
+        setDisplayValue(value);
+        // On submit failure, also clear image error
+        setImageError(null);
+        setSubmitError(
+          submitError instanceof Error
+            ? submitError.message
+            : "Failed to send message. Please try again.",
+        );
+
+        // Cancel the thread to reset loading state
+        await cancel();
+      } else {
         setValue("");
         // Clear only the images that were staged when submission started so
         // any images added while the request was in-flight are preserved.
@@ -521,22 +554,9 @@ const MessageInputInternal = React.forwardRef<
         setTimeout(() => {
           editorRef.current?.focus();
         }, 0);
-      } catch (error) {
-        console.error("Failed to submit message:", error);
-        setDisplayValue(value);
-        // On submit failure, also clear image error
-        setImageError(null);
-        setSubmitError(
-          error instanceof Error
-            ? error.message
-            : "Failed to send message. Please try again.",
-        );
-
-        // Cancel the thread to reset loading state
-        await cancel();
-      } finally {
-        setIsSubmitting(false);
       }
+
+      setIsSubmitting(false);
     },
     [
       value,

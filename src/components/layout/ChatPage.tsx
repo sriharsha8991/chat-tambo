@@ -47,6 +47,8 @@ import {
   PanelRight,
   History,
   MessageCircle,
+  FileText,
+  ClipboardList,
 } from "lucide-react";
 
 const personaConfig = {
@@ -94,6 +96,93 @@ export function ChatPage({ showSidebar = true }: ChatPageProps) {
   // Check if thread has messages
   const hasMessages = tambo?.thread?.messages && tambo.thread.messages.length > 0;
 
+  const quickActions = React.useMemo(() => {
+    if (currentPersona === "manager") {
+      return [
+        {
+          label: "Pending approvals",
+          description: "Review team requests",
+          prompt: "Show my pending approvals",
+          icon: ClipboardList,
+        },
+        {
+          label: "Team status",
+          description: "See who is working",
+          prompt: "Show my team's status today",
+          icon: Users,
+        },
+        {
+          label: "Team metrics",
+          description: "Attendance overview",
+          prompt: "Show team attendance metrics",
+          icon: PanelRight,
+        },
+        {
+          label: "Salary slips",
+          description: "Download monthly slips",
+          prompt: "Download my salary slip for this month",
+          icon: FileText,
+        },
+      ];
+    }
+
+    if (currentPersona === "hr") {
+      return [
+        {
+          label: "HR dashboard",
+          description: "System health & metrics",
+          prompt: "Show the HR system dashboard",
+          icon: Sparkles,
+        },
+        {
+          label: "Policies",
+          description: "Search HR policies",
+          prompt: "Show me the company policies",
+          icon: Building2,
+        },
+        {
+          label: "HR analytics",
+          description: "Headcount trends",
+          prompt: "Show HR analytics for headcount trends",
+          icon: PanelRight,
+        },
+        {
+          label: "Salary slips",
+          description: "Download monthly slips",
+          prompt: "Download my salary slip for this month",
+          icon: FileText,
+        },
+      ];
+    }
+
+    return [
+      {
+        label: "Check in",
+        description: "Start your day",
+        prompt: "Check me in for today",
+        icon: Sparkles,
+      },
+      {
+        label: "Leave balance",
+        description: "View your balance",
+        prompt: "Show my leave balance",
+        icon: PanelRight,
+      },
+      {
+        label: "Apply leave",
+        description: "Request time off",
+        prompt: "I want to apply for leave",
+        icon: PanelRightClose,
+      },
+      {
+        label: "Salary slip",
+        description: "Download monthly slip",
+        prompt: "Download my salary slip for this month",
+        icon: FileText,
+      },
+    ];
+  }, [currentPersona]);
+
   React.useEffect(() => {
     if (prevPersonaRef.current !== currentPersona) {
       prevPersonaRef.current = currentPersona;
@@ -118,6 +207,11 @@ export function ChatPage({ showSidebar = true }: ChatPageProps) {
       "Approval Detail": "Show me the details of pending approvals",
       "HR Dashboard": "Show the HR system dashboard",
       "Policy Viewer": "Show me the company policies",
+      "Attendance Trends": "Show attendance trends for this week",
+      "Leave Analytics": "Show leave analytics distribution",
+      "Team Metrics": "Show team attendance metrics",
+      "HR Analytics": "Show HR analytics for headcount trends",
+      "Salary Slip": "Download my salary slip for this month",
     };
 
     const prompt = componentPrompts[componentName];
@@ -162,11 +256,15 @@ export function ChatPage({ showSidebar = true }: ChatPageProps) {
 
           {/* Logo/Brand */}
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/20">
-              <Sparkles className="h-5 w-5 text-white" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-background/80 shadow-sm">
+              <img
+                src="/zoho-assistant.svg"
+                alt="Zoho Assistant logo"
+                className="h-7 w-7 object-contain"
+              />
             </div>
             <div className="hidden sm:block">
-              <span className="text-lg font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+              <span className="text-lg font-bold bg-gradient-to-r from-black via-neutral-700 to-zinc-800 bg-clip-text text-transparent">
                 Zoho People AI
               </span>
             </div>
@@ -212,7 +310,7 @@ export function ChatPage({ showSidebar = true }: ChatPageProps) {
                     <div className="flex flex-col">
                       <span className="font-medium">{pConfig.label}</span>
                       <span className="text-xs text-muted-foreground">
-                        {persona === "employee" && "Priya Sharma • Engineering"}
+                        {persona === "employee" && "Amit Patel • Engineering"}
                         {persona === "manager" && "Rajesh Kumar • Engineering Lead"}
                         {persona === "hr" && "Ananya Patel • HR Department"}
                       </span>
@@ -260,50 +358,64 @@ export function ChatPage({ showSidebar = true }: ChatPageProps) {
               <div className="mx-auto max-w-3xl">
                 {/* Welcome Section - Only show when no messages */}
                 {!hasMessages && (
-                  <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in-50 duration-500">
-                    {/* Animated Icon */}
-                    <div className={cn(
-                      "mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br shadow-2xl",
-                      config.gradient,
-                      "shadow-purple-500/25"
-                    )}>
-                      <MessageCircle className="h-10 w-10 text-white" />
+                  <div className="relative flex flex-col items-center justify-center py-12 text-center animate-in fade-in-50 duration-500">
+                    <div className="absolute inset-0 -z-10">
+                      <div className="pointer-events-none absolute left-1/2 top-8 h-40 w-40 -translate-x-1/2 rounded-full bg-gradient-to-br from-primary/15 to-transparent blur-3xl" />
+                      <div className="pointer-events-none absolute right-8 top-24 h-28 w-28 rounded-full bg-gradient-to-br from-blue-400/20 to-transparent blur-2xl" />
                     </div>
 
                     {/* Welcome Text */}
-                    <h1 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">
-                      Hello, {currentUser.name.split(" ")[0]}! 👋
-                    </h1>
-                    <p className="mb-8 max-w-md text-muted-foreground">
-                      I'm your intelligent HR assistant. Ask me anything about attendance, 
-                      leaves, approvals, or HR policies.
-                    </p>
-
-                    {/* Suggestion Cards */}
-                    <div className="grid w-full max-w-2xl gap-3 sm:grid-cols-3">
-                      {starterSuggestions.map((suggestion, index) => (
-                        <button
-                          key={suggestion.id}
-                          onClick={() => handleSuggestionClick(suggestion.detailedSuggestion)}
-                          className={cn(
-                            "group relative flex flex-col items-start gap-2 rounded-2xl border border-border/50 bg-background/50 p-4 text-left transition-all duration-200",
-                            "hover:border-primary/30 hover:bg-background hover:shadow-lg hover:shadow-primary/5",
-                            "hover:-translate-y-0.5",
-                            "animate-in fade-in-50 slide-in-from-bottom-4",
-                          )}
-                          style={{ animationDelay: `${index * 100}ms` }}
-                        >
-                          <span className="text-2xl">{suggestion.title.split(" ")[0]}</span>
-                          <span className="text-sm font-medium text-foreground">
-                            {suggestion.title.split(" ").slice(1).join(" ")}
-                          </span>
-                          <span className="text-xs text-muted-foreground line-clamp-2">
-                            {suggestion.detailedSuggestion}
-                          </span>
-                          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                        </button>
-                      ))}
+                    <div className="mb-6 flex flex-col items-center gap-2">
+                      <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/60 px-3 py-1 text-xs text-muted-foreground shadow-sm">
+                        <PersonaIcon className={cn("h-3.5 w-3.5", config.color)} />
+                        {config.label} workspace • Ready for actions
+                      </div>
+                      <h1 className="text-2xl font-bold text-foreground sm:text-3xl">
+                        Hello, {currentUser.name.split(" ")[0]}! 👋
+                      </h1>
+                      <p className="max-w-lg text-sm text-muted-foreground sm:text-base">
+                        Tell me what you need. I will instantly render the right HR UI and guide
+                        you to completion without navigating menus.
+                      </p>
                     </div>
+
+                    {/* Quick Actions */}
+                    <div className="mb-6 grid w-full max-w-3xl gap-3 sm:grid-cols-2">
+                      {quickActions.map((action, index) => {
+                        const ActionIcon = action.icon;
+                        return (
+                          <button
+                            key={action.label}
+                            onClick={() => handleSuggestionClick(action.prompt)}
+                            className={cn(
+                              "group flex items-center justify-between rounded-2xl border border-border/50 bg-background/60 p-4 text-left",
+                              "transition-all duration-200 hover:border-primary/30 hover:bg-background",
+                              "hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5",
+                              "animate-in fade-in-50 slide-in-from-bottom-4",
+                            )}
+                            style={{ animationDelay: `${index * 80}ms` }}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "flex h-10 w-10 items-center justify-center rounded-xl bg-muted/60",
+                                config.bgColor
+                              )}>
+                                <ActionIcon className={cn("h-5 w-5", config.color)} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">{action.label}</p>
+                                <p className="text-xs text-muted-foreground">{action.description}</p>
+                              </div>
+                            </div>
+                            <span className="text-xs text-muted-foreground group-hover:text-primary">
+                              Ask
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Suggestion Cards removed to keep landing focused */}
                   </div>
                 )}
 

@@ -24,6 +24,7 @@ import {
   AnnouncementBoard,
   DocumentCenter,
   PolicyManager,
+  SalarySlipForm,
 } from "@/components/hr";
 import {
   getAttendanceStatus,
@@ -377,6 +378,21 @@ export const components: TamboComponent[] = [
         label: z.string(),
       })).describe("Leave balances to show available days"),
       preselectedType: z.string().optional().describe("Pre-selected leave type"),
+    }),
+  },
+  {
+    name: "SalarySlipForm",
+    description:
+      "A quick form to download salary slips for a single month or multiple months. " +
+      "Use when a user asks for salary slips or monthly payslips.",
+    component: SalarySlipForm,
+    propsSchema: z.object({
+      employeeName: z.string().optional().describe("Employee name to show on the slip"),
+      employeeId: z.string().optional().describe("Employee ID to show on the slip"),
+      department: z.string().optional().describe("Employee department"),
+      defaultMode: z.enum(["single", "multiple"]).optional().describe("Default selection mode"),
+      defaultMonth: z.string().optional().describe("Default month (MM)"),
+      defaultYear: z.number().optional().describe("Default year (YYYY)"),
     }),
   },
   {
