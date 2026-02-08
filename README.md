@@ -1,131 +1,140 @@
-# Tambo Template
+# Zoho People AI: Agentic Generative UI
 
-This is a starter NextJS app with Tambo hooked up to get your AI app development started quickly.
+An intent-driven HR workspace that reimagines how employees, managers, and HR admins complete routine tasks. This app uses Tambo to render pre-registered UI components based on persona, intent, and context.
 
-## Get Started
+## Problem Statement
 
-1. Run `npm create-tambo@latest my-tambo-app` for a new project
+Enterprise HR tools like Zoho People expose powerful features through complex, module-driven interfaces. Users must remember where actions live, leading to navigation overhead, repeated errors, and missed workflows (checkouts, approvals, regularizations).
 
-2. `npm install`
+## Solution (Generative UI)
 
-3. `npx tambo init`
+We build a persona-aware operational layer where the AI selects and orchestrates pre-registered components instead of generating new UI. Chat is only for intent capture and clarification. All real actions happen through structured UI.
 
-- or rename `example.env.local` to `.env.local` and add your tambo API key you can get for free [here](https://tambo.co/dashboard).
+**Flow:**
 
-4. Run `npm run dev` and go to `localhost:3000` to use the app!
-
-## Customizing
-
-### Change what components tambo can control
-
-You can see how components are registered with tambo in `src/lib/tambo.ts`:
-
-```tsx
-export const components: TamboComponent[] = [
-  {
-    name: "Graph",
-    description:
-      "A component that renders various types of charts (bar, line, pie) using Recharts. Supports customizable data visualization with labels, datasets, and styling options.",
-    component: Graph,
-    propsSchema: graphSchema,
-  },
-  // Add more components here
-];
+```
+User input -> persona -> intent -> context -> component selection -> render -> state update
 ```
 
-You can install the graph component into any project with:
+## Intuition Behind The Design
 
-```bash
-npx tambo add graph
+Humans think in goals, not modules. The system flips the mental model from:
+
+```
+Menu -> submenu -> screen -> action
 ```
 
-The example Graph component demonstrates several key features:
+to:
 
-- Different prop types (strings, arrays, enums, nested objects)
-- Multiple chart types (bar, line, pie)
-- Customizable styling (variants, sizes)
-- Optional configurations (title, legend, colors)
-- Data visualization capabilities
-
-Update the `components` array with any component(s) you want tambo to be able to use in a response!
-
-You can find more information about the options [here](https://docs.tambo.co/concepts/generative-interfaces/generative-components)
-
-### Add tools for tambo to use
-
-Tools are defined with `inputSchema` and `outputSchema`:
-
-```tsx
-export const tools: TamboTool[] = [
-  {
-    name: "globalPopulation",
-    description:
-      "A tool to get global population trends with optional year range filtering",
-    tool: getGlobalPopulationTrend,
-    inputSchema: z.object({
-      startYear: z.number().optional(),
-      endYear: z.number().optional(),
-    }),
-    outputSchema: z.array(
-      z.object({
-        year: z.number(),
-        population: z.number(),
-        growthRate: z.number(),
-      }),
-    ),
-  },
-];
+```
+Persona -> intent -> component -> action
 ```
 
-Find more information about tools [here.](https://docs.tambo.co/concepts/tools)
+Generative UI is bounded: the AI can only render components we register, keeping the experience safe, predictable, and auditable.
 
-### The Magic of Tambo Requires the TamboProvider
+## Code Structure (What Lives Where)
 
-Make sure in the TamboProvider wrapped around your app:
+- App entry and layout
+  - [src/app/page.tsx](src/app/page.tsx) wires `PersonaProvider` + `TamboWrapper` + `ChatPage`.
+  - [src/app/layout.tsx](src/app/layout.tsx) provides fonts and global styles.
 
-```tsx
-...
-<TamboProvider
-  apiKey={process.env.NEXT_PUBLIC_TAMBO_API_KEY!}
-  components={components} // Array of components to control
-  tools={tools} // Array of tools it can use
->
-  {children}
-</TamboProvider>
+- Persona and context
+  - [src/contexts/PersonaContext.tsx](src/contexts/PersonaContext.tsx) loads persona profiles and maintains live user context.
+  - [src/components/layout/TamboWrapper.tsx](src/components/layout/TamboWrapper.tsx) maps persona + context into Tambo `contextHelpers`.
+
+- Generative UI registry
+  - [src/lib/tambo.ts](src/lib/tambo.ts) registers **tools** (data ops) and **components** (renderable UI) with Zod schemas.
+  - [src/components/hr](src/components/hr) contains persona-scoped HR UI components.
+  - [src/components/tambo](src/components/tambo) contains chat and generative UI primitives.
+
+- Data and backend
+  - [src/app/api/hr/route.ts](src/app/api/hr/route.ts) is the HR API surface (GET/POST actions).
+  - [src/services/hr-api-client.ts](src/services/hr-api-client.ts) is the client-side API wrapper used by tools.
+  - [src/services/hr-unified.ts](src/services/hr-unified.ts) currently targets Supabase-backed services.
+  - [src/services/supabase-hr](src/services/supabase-hr) contains the Supabase data access modules.
+  - [src/data/store.json](src/data/store.json) and [src/services/hr-data.ts](src/services/hr-data.ts) provide JSON-backed mock data (not wired into the API route right now).
+
+- Realtime updates
+  - [src/lib/use-realtime-hr.ts](src/lib/use-realtime-hr.ts) subscribes to Supabase changes and dispatches a global `hr-data-updated` event.
+
+## Internal Connections & Relations
+
+- UI -> Tambo
+  - `ChatPage` uses `useTambo()` to send messages and render the thread.
+  - `TamboWrapper` injects `contextHelpers` (persona, user, time) into every prompt.
+
+- Tambo -> Tools -> API
+  - Tools registered in [src/lib/tambo.ts](src/lib/tambo.ts) call functions in [src/services/hr-api-client.ts](src/services/hr-api-client.ts).
+  - The client hits [src/app/api/hr/route.ts](src/app/api/hr/route.ts) to perform data operations.
+
+- API -> Data Layer
+  - `route.ts` calls [src/services/hr-unified.ts](src/services/hr-unified.ts).
+  - `hr-unified` calls Supabase modules in [src/services/supabase-hr](src/services/supabase-hr).
+
+- State Refresh
+  - `hr-api-client` and `use-realtime-hr` emit `hr-data-updated` so UI components can refresh without manual reloads.
+
+## How To Run
+
+1. Install dependencies
+
+```
+npm install
 ```
 
-In this example we do this in the `Layout.tsx` file, but you can do it anywhere in your app that is a client component.
+2. Configure environment
 
-### Voice input
+Copy [example.env.local](example.env.local) to `.env.local` and set:
 
-The template includes a `DictationButton` component using the `useTamboVoice` hook for speech-to-text input.
+- `NEXT_PUBLIC_TAMBO_API_KEY`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-### MCP (Model Context Protocol)
+3. Start the dev server
 
-The template includes MCP support for connecting to external tools and resources. You can use the MCP hooks from `@tambo-ai/react/mcp`:
-
-- `useTamboMcpPromptList` - List available prompts from MCP servers
-- `useTamboMcpPrompt` - Get a specific prompt
-- `useTamboMcpResourceList` - List available resources
-
-See `src/components/tambo/mcp-components.tsx` for example usage.
-
-### Change where component responses are shown
-
-The components used by tambo are shown alongside the message response from tambo within the chat thread, but you can have the result components show wherever you like by accessing the latest thread message's `renderedComponent` field:
-
-```tsx
-const { thread } = useTambo();
-const latestComponent =
-  thread?.messages[thread.messages.length - 1]?.renderedComponent;
-
-return (
-  <div>
-    {latestComponent && (
-      <div className="my-custom-wrapper">{latestComponent}</div>
-    )}
-  </div>
-);
+```
+npm run dev
 ```
 
-For more detailed documentation, visit [Tambo's official docs](https://docs.tambo.co).
+Open http://localhost:3000
+
+## Using The App
+
+- Switch personas from the top-right menu (Employee, Manager, HR Admin).
+- Ask for common HR actions (leave request, approvals, attendance regularization).
+- Use the Components sidebar to trigger exact UI components via curated prompts.
+
+## Demo Scenarios
+
+These are quick, end-to-end prompts to showcase the generative UI. Full checklist: [TEST_SCENARIOS.md](TEST_SCENARIOS.md).
+
+- Employee: "I forgot to check out yesterday. Please regularize at 6:30 PM."
+- Employee: "Show my leave balance" and then "Apply for 2 days casual leave next week."
+- Manager: "Show my pending approvals" and "Approve Priya's leave request."
+- Manager: "Show my team's status today."
+- HR: "Show the HR dashboard metrics" and "What is the leave policy?"
+
+## Customize The Generative UI
+
+- Add or edit components in [src/components/hr](src/components/hr) and register them in [src/lib/tambo.ts](src/lib/tambo.ts).
+- Add or edit tools in [src/services/hr-api-client.ts](src/services/hr-api-client.ts) and register them in [src/lib/tambo.ts](src/lib/tambo.ts) with Zod schemas.
+- Adjust persona context in [src/contexts/PersonaContext.tsx](src/contexts/PersonaContext.tsx) and update `contextHelpers` in [src/components/layout/TamboWrapper.tsx](src/components/layout/TamboWrapper.tsx).
+
+## Tests
+
+Run unit tests with Vitest:
+
+```
+npm run test
+```
+
+Watch mode:
+
+```
+npm run test:watch
+```
+
+## Notes
+
+- The API route is wired to Supabase via [src/services/hr-unified.ts](src/services/hr-unified.ts). The JSON store in [src/data/store.json](src/data/store.json) is available for local mock data but is not currently used by the API route.
+- For Tambo specifics, see https://docs.tambo.co
