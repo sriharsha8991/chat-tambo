@@ -366,10 +366,6 @@ export function ChatPage({ showSidebar = true }: ChatPageProps) {
 
                     {/* Welcome Text */}
                     <div className="mb-6 flex flex-col items-center gap-2">
-                      <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/60 px-3 py-1 text-xs text-muted-foreground shadow-sm">
-                        <PersonaIcon className={cn("h-3.5 w-3.5", config.color)} />
-                        {config.label} workspace • Ready for actions
-                      </div>
                       <h1 className="text-2xl font-bold text-foreground sm:text-3xl">
                         Hello, {currentUser.name.split(" ")[0]}! 👋
                       </h1>

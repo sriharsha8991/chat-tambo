@@ -74,6 +74,26 @@ Generative UI is bounded: the AI can only render components we register, keeping
 - State Refresh
   - `hr-api-client` and `use-realtime-hr` emit `hr-data-updated` so UI components can refresh without manual reloads.
 
+## Architecture Diagram
+
+```mermaid
+flowchart TD
+  User[User] --> UI[Chat UI + Persona Context]
+    UI --> Context["Context Helpers: persona, user, time"]
+  Context --> Tambo[Tambo Orchestrator]
+  Tambo --> Intent[Intent Selection]
+  Intent --> Registry[Component + Tool Registry]
+  Registry --> Schema[Zod Schema Validation]
+  Schema --> Components[HR UI Components]
+  Schema --> Tools[HR Tools]
+  Components --> UI
+  Tools --> Api[Next.js API /api/hr]
+  Api --> Services[HR Unified Service]
+  Services --> Supabase[(Supabase DB)]
+  Supabase --> Realtime[Realtime Updates]
+  Realtime --> UI
+```
+
 ## How To Run
 
 1. Install dependencies

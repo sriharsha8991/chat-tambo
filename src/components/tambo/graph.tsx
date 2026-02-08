@@ -269,6 +269,12 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
       );
     }
 
+    const series = validDatasets.map((dataset, index) => ({
+      key: `series_${index}`,
+      label: dataset.label,
+      color: dataset.color,
+    }));
+
     // Use the minimum length between labels and the shortest dataset
     const maxDataPoints = Math.min(
       data.labels.length,
@@ -281,9 +287,9 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
       .map((label, index) => ({
         name: label,
         ...Object.fromEntries(
-          validDatasets.map((dataset) => [
-            dataset.label,
-            dataset.data[index] ?? 0,
+          series.map((item, seriesIndex) => [
+            item.key,
+            validDatasets[seriesIndex].data[index] ?? 0,
           ]),
         ),
       }));
@@ -343,13 +349,12 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
                   }}
                 />
               )}
-              {validDatasets.map((dataset, index) => (
+              {series.map((item, index) => (
                 <RechartsCore.Bar
-                  key={dataset.label}
-                  dataKey={dataset.label}
-                  fill={
-                    dataset.color ?? defaultColors[index % defaultColors.length]
-                  }
+                  key={item.key}
+                  dataKey={item.key}
+                  name={item.label}
+                  fill={item.color ?? defaultColors[index % defaultColors.length]}
                   radius={[6, 6, 0, 0]}
                   maxBarSize={36}
                   stroke="var(--background)"
@@ -402,13 +407,12 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
                   }}
                 />
               )}
-              {validDatasets.map((dataset, index) => (
+              {series.map((item, index) => (
                 <RechartsCore.Bar
-                  key={dataset.label}
-                  dataKey={dataset.label}
-                  fill={
-                    dataset.color ?? defaultColors[index % defaultColors.length]
-                  }
+                  key={item.key}
+                  dataKey={item.key}
+                  name={item.label}
+                  fill={item.color ?? defaultColors[index % defaultColors.length]}
                   radius={[6, 6, 0, 0]}
                   maxBarSize={28}
                   stroke="var(--background)"
@@ -439,6 +443,10 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
               fill: defaultColors[index % defaultColors.length],
             }));
 
+          const pieOuterRadius = 110;
+          const pieInnerRadius = 58;
+          const minLabelPercent = 0.08;
+
           const renderPieLabel = (props: {
             name?: string;
             value?: number;
@@ -451,7 +459,6 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
           }) => {
             const {
               name,
-              value,
               percent,
               cx = 0,
               cy = 0,
@@ -460,15 +467,18 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
               outerRadius = 0,
             } = props;
 
-            const radius = innerRadius + (outerRadius - innerRadius) * 0.65;
+            if (!Number.isFinite(percent) || (percent ?? 0) < minLabelPercent) {
+              return null;
+            }
+
+            const radius = innerRadius + (outerRadius - innerRadius) * 0.72;
             const angle = (Math.PI / 180) * -midAngle;
             const x = cx + radius * Math.cos(angle);
             const y = cy + radius * Math.sin(angle);
             const percentValue = Number.isFinite(percent)
               ? `${Math.round((percent || 0) * 100)}%`
               : "";
-            const valueLabel = Number.isFinite(value) ? String(value) : "";
-            const label = [name, valueLabel, percentValue].filter(Boolean).join(" · ");
+            const label = [name, percentValue].filter(Boolean).join(" · ");
 
             return (
               <text
@@ -492,8 +502,8 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
                 nameKey="name"
                 cx="50%"
                 cy="52%"
-                innerRadius={50}
-                outerRadius={90}
+                innerRadius={pieInnerRadius}
+                outerRadius={pieOuterRadius}
                 labelLine={false}
                 fill="var(--muted)"
                 opacity={0.35}
@@ -507,8 +517,8 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
                 cy="50%"
                 labelLine={{ stroke: "var(--border)" }}
                 label={renderPieLabel}
-                innerRadius={50}
-                outerRadius={90}
+                innerRadius={pieInnerRadius}
+                outerRadius={pieOuterRadius}
                 paddingAngle={2}
                 cornerRadius={6}
                 stroke="var(--background)"
@@ -535,6 +545,19 @@ export const Graph = React.forwardRef<HTMLDivElement, GraphProps>(
                   wrapperStyle={{
                     color: "var(--foreground)",
                   }}
+                  content={({ payload }) => (
+                    <div style={{ color: "var(--foreground)" }} className="flex flex-wrap gap-2 justify-center">
+                      {pieData.map((item) => (
+                        <div key={item.name} className="flex items-center gap-2 text-sm">
+                          <div
+                            style={{ backgroundColor: item.fill }}
+                            className="w-3 h-3 rounded-full"
+                          />
+                          <span>{item.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 />
               )}
             </RechartsCore.PieChart>
