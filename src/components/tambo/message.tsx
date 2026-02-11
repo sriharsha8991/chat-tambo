@@ -16,6 +16,9 @@ import { Check, ChevronDown, ExternalLink, Loader2, X } from "lucide-react";
 import * as React from "react";
 import { useState } from "react";
 import { Streamdown } from "streamdown";
+import { PinButton } from "@/components/layout/PinButton";
+import { toolNameToQueryId } from "@/services/query-resolver";
+import type { QueryDescriptor } from "@/types/dashboard";
 
 /**
  * Converts message content to markdown format for rendering with streamdown.
@@ -1011,6 +1014,23 @@ const MessageRenderedComponentArea = React.forwardRef<
     };
   }, []);
 
+  // Derive pin metadata from the message
+  const pinInfo = React.useMemo(() => {
+    const componentName = (message as any).component?.componentName as string | undefined;
+    if (!componentName) return null;
+
+    const toolCall = getToolCallRequest(message);
+    if (!toolCall?.toolName) return null;
+
+    const queryId = toolNameToQueryId(toolCall.toolName);
+    if (!queryId) return null;
+
+    const params = keyifyParameters(toolCall.parameters) ?? {};
+
+    const queryDescriptor: QueryDescriptor = { queryId, params };
+    return { componentName, queryDescriptor };
+  }, [message]);
+
   if (
     !message.renderedComponent ||
     role !== "assistant" ||
@@ -1028,7 +1048,7 @@ const MessageRenderedComponentArea = React.forwardRef<
     >
       {children ??
         (canvasExists ? (
-          <div className="flex justify-start pl-4">
+          <div className="flex justify-start pl-4 gap-2">
             <button
               onClick={() => {
                 if (typeof window !== "undefined") {
@@ -1048,9 +1068,25 @@ const MessageRenderedComponentArea = React.forwardRef<
               View component
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
+            {pinInfo && (
+              <PinButton
+                componentName={pinInfo.componentName}
+                queryDescriptor={pinInfo.queryDescriptor}
+              />
+            )}
           </div>
         ) : (
-          <div className="w-full pt-2 px-2">{message.renderedComponent}</div>
+          <div className="w-full pt-2 px-2">
+            {message.renderedComponent}
+            {pinInfo && (
+              <div className="flex justify-end mt-2">
+                <PinButton
+                  componentName={pinInfo.componentName}
+                  queryDescriptor={pinInfo.queryDescriptor}
+                />
+              </div>
+            )}
+          </div>
         ))}
     </div>
   );

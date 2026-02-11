@@ -450,6 +450,49 @@ export async function getAllPendingApprovals(managerId: string) {
 }
 
 // ============================================
+// PINNED WIDGETS
+// ============================================
+
+export async function getPinnedWidgets(employeeId: string) {
+  requireSupabase();
+  return supabaseHR.getPinnedWidgets(employeeId);
+}
+
+export async function pinWidget(input: {
+  employeeId: string;
+  componentName: string;
+  queryDescriptor: Record<string, unknown>;
+  layout?: Record<string, unknown>;
+  title?: string | null;
+  orderIndex?: number;
+}) {
+  requireSupabase();
+  return supabaseHR.pinWidget(input);
+}
+
+export async function unpinWidget(widgetId: string) {
+  requireSupabase();
+  return supabaseHR.unpinWidget(widgetId);
+}
+
+export async function updateWidgetLayout(widgetId: string, layout: Record<string, unknown>) {
+  requireSupabase();
+  return supabaseHR.updateWidgetLayout(widgetId, layout);
+}
+
+export async function batchUpdateWidgetLayouts(
+  updates: Array<{ id: string; layout: Record<string, unknown> }>
+) {
+  requireSupabase();
+  return supabaseHR.batchUpdateLayouts(updates);
+}
+
+export async function clearAllPinnedWidgets(employeeId: string) {
+  requireSupabase();
+  return supabaseHR.clearAllPinnedWidgets(employeeId);
+}
+
+// ============================================
 // REAL-TIME SUBSCRIPTIONS (Supabase only)
 // ============================================
 

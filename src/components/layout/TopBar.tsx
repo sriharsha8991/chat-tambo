@@ -12,9 +12,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Settings, User, Users, Shield } from "lucide-react";
+import { ChevronDown, LayoutDashboard, Settings, User, Users, Shield } from "lucide-react";
 import type { PersonaRole } from "@/types/hr";
 import { NotifierBell } from "./NotifierBell";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const personaConfig: Record<PersonaRole, { label: string; icon: React.ReactNode; color: string }> = {
   employee: {
@@ -37,18 +39,42 @@ const personaConfig: Record<PersonaRole, { label: string; icon: React.ReactNode;
 export function TopBar() {
   const { currentPersona, currentUser, setPersona, availablePersonas } = usePersona();
   const config = personaConfig[currentPersona];
+  const pathname = usePathname();
 
   return (
     <header className="h-16 border-b bg-white flex items-center justify-between px-6 shadow-sm">
       {/* Logo & Title */}
-      <div className="flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
-          <span className="text-white font-bold text-sm">ZP</span>
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
+            <span className="text-white font-bold text-sm">ZP</span>
+          </div>
+          <div>
+            <h1 className="font-semibold text-gray-900">Zoho People</h1>
+            <p className="text-xs text-gray-500">Generative Workspace</p>
+          </div>
         </div>
-        <div>
-          <h1 className="font-semibold text-gray-900">Zoho People</h1>
-          <p className="text-xs text-gray-500">Generative Workspace</p>
-        </div>
+
+        {/* Navigation Links */}
+        <nav className="flex items-center gap-1">
+          <Link
+            href="/"
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              pathname === "/" ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            Chat
+          </Link>
+          <Link
+            href="/dashboard"
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center gap-1.5 ${
+              pathname === "/dashboard" ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            <LayoutDashboard className="h-3.5 w-3.5" />
+            Dashboard
+          </Link>
+        </nav>
       </div>
 
       {/* Center - Persona Indicator */}

@@ -9,3 +9,4 @@ export * from './documents';
 export * from './policies';
 export * from './regularizations';
 export * from './subscriptions';
+export * from './pinned-widgets';

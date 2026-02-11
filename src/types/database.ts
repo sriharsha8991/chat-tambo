@@ -338,6 +338,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      pinned_widgets: {
+        Row: {
+          id: string;
+          employee_id: string;
+          component_name: string;
+          query_descriptor: Record<string, unknown>;
+          layout: Record<string, unknown>;
+          title: string | null;
+          order_index: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          employee_id: string;
+          component_name: string;
+          query_descriptor: Record<string, unknown>;
+          layout?: Record<string, unknown>;
+          title?: string | null;
+          order_index?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          employee_id?: string;
+          component_name?: string;
+          query_descriptor?: Record<string, unknown>;
+          layout?: Record<string, unknown>;
+          title?: string | null;
+          order_index?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       notifications: {
         Row: {
           id: string;
@@ -393,3 +429,4 @@ export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 export type Announcement = Database["public"]["Tables"]["announcements"]["Row"];
 export type Document = Database["public"]["Tables"]["documents"]["Row"];
 export type DocumentAcknowledgment = Database["public"]["Tables"]["document_acknowledgments"]["Row"];
+export type PinnedWidgetRow = Database["public"]["Tables"]["pinned_widgets"]["Row"];
