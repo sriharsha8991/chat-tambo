@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
 import type { PersonaRole, UserProfile, UserContext } from "@/types/hr";
-import { getAllEmployees } from "@/services/hr-api-client";
+import { apiGet } from "@/lib/api-client";
 
 interface PersonaContextValue {
   // Current persona and user
@@ -72,7 +72,18 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
 
     const loadUsers = async () => {
       try {
-        const employees = await getAllEmployees();
+        // Fetch only one representative per role (3 rows instead of all)
+        const employees = await apiGet<Array<{
+          id: string;
+          employee_id?: string;
+          employeeId?: string;
+          name: string;
+          email: string;
+          role: "employee" | "manager" | "hr";
+          department: string;
+          manager_id?: string | null;
+          managerId?: string | null;
+        }>>("getPersonaUsers");
         const mapped = employees.map((employee) => ({
           id: employee.id,
           employeeId: employee.employeeId || employee.employee_id || employee.id,

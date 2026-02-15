@@ -43,6 +43,11 @@ export async function getAllEmployees() {
   return supabaseHR.getAllEmployees();
 }
 
+export async function getPersonaUsers() {
+  requireSupabase();
+  return supabaseHR.getPersonaUsers();
+}
+
 // ============================================
 // TEAM OPERATIONS
 // ============================================

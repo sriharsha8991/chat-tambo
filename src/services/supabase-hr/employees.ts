@@ -70,3 +70,30 @@ export async function getAllEmployees(): Promise<Employee[]> {
 
   return (data as Employee[]) || [];
 }
+
+/**
+ * Fetch one representative employee per role (employee, manager, hr).
+ * Used by PersonaContext to avoid loading the full employees table.
+ */
+export async function getPersonaUsers(): Promise<Employee[]> {
+  if (!isSupabaseConfigured()) return [];
+  const db = getDb();
+
+  const roles = ['employee', 'manager', 'hr'] as const;
+  const results: Employee[] = [];
+
+  for (const role of roles) {
+    const { data, error } = await db
+      .from('employees')
+      .select('*')
+      .eq('role', role)
+      .order('name')
+      .limit(1);
+
+    if (!error && data && data.length > 0) {
+      results.push(data[0] as Employee);
+    }
+  }
+
+  return results;
+}

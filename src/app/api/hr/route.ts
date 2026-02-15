@@ -122,6 +122,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(await hrService.getAcknowledgedDocumentIds(employeeId));
       }
 
+      case "getPersonaUsers":
+        return NextResponse.json(await hrService.getPersonaUsers());
+
       case "getSystemMetrics":
         return NextResponse.json(await hrService.getSystemMetrics());
 

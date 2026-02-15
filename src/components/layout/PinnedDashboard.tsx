@@ -1,6 +1,7 @@
 "use client";
 
 import { usePinnedWidgets } from "@/hooks/usePinnedWidgets";
+import { refreshAllWidgets } from "@/hooks/useLiveQuery";
 import { WidgetWrapper } from "./WidgetWrapper";
 import type { PinnedWidget, GridLayout } from "@/types/dashboard";
 import { Loader2, LayoutDashboard, Trash2, RefreshCw } from "lucide-react";
@@ -45,12 +46,13 @@ export function PinnedDashboard({ className }: { className?: string }) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
 
-  const handleRefreshAll = useCallback(() => {
+  const handleRefreshAll = useCallback(async () => {
     setIsRefreshingAll(true);
-    // Dispatch the global event that all useLiveQuery instances listen to
-    window.dispatchEvent(new Event("hr-data-updated"));
-    // Reset the spinning state after a short delay
-    setTimeout(() => setIsRefreshingAll(false), 1500);
+    try {
+      await refreshAllWidgets();
+    } finally {
+      setIsRefreshingAll(false);
+    }
   }, []);
 
   // Build react-grid-layout items from pinned widgets

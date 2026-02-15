@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { PersonaProvider, usePersona } from "@/contexts/PersonaContext";
+import { usePersona } from "@/contexts/PersonaContext";
 import type { PersonaRole } from "@/types/hr";
 import {
   CheckInOutCard,
@@ -264,9 +264,5 @@ function TestContent() {
 }
 
 export default function TestPage() {
-  return (
-    <PersonaProvider>
-      <TestContent />
-    </PersonaProvider>
-  );
+  return <TestContent />;
 }
