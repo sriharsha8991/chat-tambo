@@ -54,8 +54,20 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [userContextState, setUserContextState] = useState<UserContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const employeesLoadedRef = React.useRef(false);
 
   useEffect(() => {
+    // Skip re-fetching if already loaded
+    if (employeesLoadedRef.current) {
+      // Just switch persona with existing data
+      const nextUser = usersByRole[currentPersona];
+      if (nextUser) {
+        setCurrentUser(nextUser);
+        setUserContextState(getInitialUserContext(nextUser));
+      }
+      return;
+    }
+
     let isMounted = true;
 
     const loadUsers = async () => {
@@ -83,6 +95,7 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
           const initialUser = nextUsers[currentPersona] || mapped[0] || null;
           setCurrentUser(initialUser);
           setUserContextState(initialUser ? getInitialUserContext(initialUser) : null);
+          employeesLoadedRef.current = true;
         }
       } catch (error) {
         console.error("Failed to load personas:", error);

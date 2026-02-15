@@ -17,7 +17,7 @@ import * as React from "react";
 import { useState } from "react";
 import { Streamdown } from "streamdown";
 import { PinButton } from "@/components/layout/PinButton";
-import { toolNameToQueryId } from "@/services/query-resolver";
+import { toolNameToQueryId, componentNameToQueryId } from "@/services/query-resolver";
 import type { QueryDescriptor } from "@/types/dashboard";
 
 /**
@@ -1019,13 +1019,22 @@ const MessageRenderedComponentArea = React.forwardRef<
     const componentName = (message as any).component?.componentName as string | undefined;
     if (!componentName) return null;
 
+    // Try to get queryId from tool call first
     const toolCall = getToolCallRequest(message);
-    if (!toolCall?.toolName) return null;
+    let queryId: string | null = null;
+    let params: Record<string, unknown> = {};
 
-    const queryId = toolNameToQueryId(toolCall.toolName);
+    if (toolCall?.toolName) {
+      queryId = toolNameToQueryId(toolCall.toolName);
+      params = keyifyParameters(toolCall.parameters) ?? {};
+    }
+
+    // Fallback: derive queryId from component name
+    if (!queryId) {
+      queryId = componentNameToQueryId(componentName);
+    }
+
     if (!queryId) return null;
-
-    const params = keyifyParameters(toolCall.parameters) ?? {};
 
     const queryDescriptor: QueryDescriptor = { queryId, params };
     return { componentName, queryDescriptor };

@@ -69,7 +69,7 @@ function ProactiveAlert({ type, title, message }: { type: "warning" | "info"; ti
 
 // Employee Dashboard
 function EmployeeDashboard() {
-  const { userContext } = useUserContext();
+  const { userContext, updateUserContext } = useUserContext();
   const { currentUser } = usePersona();
   
   const [leaveBalances, setLeaveBalances] = useState<Awaited<ReturnType<typeof getLeaveBalance>>>([]);
@@ -100,6 +100,15 @@ function EmployeeDashboard() {
       setAnnouncements(ann);
       setDocuments(docs);
       setAcknowledgedIds(ackIds);
+      
+      // Update user context with real attendance data so proactive alerts fire
+      if (att?.todayStatus) {
+        updateUserContext({
+          isCheckedInToday: att.todayStatus.isCheckedIn,
+          hasMissedCheckout: att.todayStatus.hasMissedCheckout,
+          missedCheckoutDate: att.todayStatus.missedCheckoutDate,
+        });
+      }
     } catch (error) {
       console.error("Failed to fetch employee data:", error);
     } finally {

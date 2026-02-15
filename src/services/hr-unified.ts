@@ -480,6 +480,11 @@ export async function updateWidgetLayout(widgetId: string, layout: Record<string
   return supabaseHR.updateWidgetLayout(widgetId, layout);
 }
 
+export async function updateWidgetTitle(widgetId: string, title: string) {
+  requireSupabase();
+  return supabaseHR.updateWidgetTitle(widgetId, title);
+}
+
 export async function batchUpdateWidgetLayouts(
   updates: Array<{ id: string; layout: Record<string, unknown> }>
 ) {

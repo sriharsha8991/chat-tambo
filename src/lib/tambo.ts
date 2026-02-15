@@ -199,6 +199,7 @@ export const tools: TamboTool[] = [
       type: z.enum(["leave", "regularization", "wfh"]).optional().describe("Type of approval when known"),
       action: z.enum(["approve", "reject"]).describe("Whether to approve or reject"),
       comment: z.string().optional().describe("Optional comment for the decision"),
+      managerId: z.string().optional().describe("ID of the manager processing the approval. If not provided, the current user's ID will be used."),
     }),
     outputSchema: z.object({
       success: z.boolean(),
@@ -339,6 +340,7 @@ export const components: TamboComponent[] = [
       "or when employee needs to check in/out.",
     component: CheckInOutCard,
     propsSchema: z.object({
+      employeeId: z.string().optional().describe("Employee ID for check-in/out actions"),
       checkInTime: z.string().optional().describe("Check-in time (HH:MM:SS format)"),
       checkOutTime: z.string().optional().describe("Check-out time (HH:MM:SS format)"),
       status: z.enum(["not_checked_in", "checked_in", "checked_out"])

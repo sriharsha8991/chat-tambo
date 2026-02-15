@@ -10,7 +10,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { usePersona } from "@/contexts/PersonaContext";
 import { supabase } from "@/lib/supabase";
-import { getDefaultLayout } from "@/lib/component-registry";
 import type { PinnedWidget, QueryDescriptor, GridLayout } from "@/types/dashboard";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -19,6 +18,13 @@ const API_BASE = "/api/hr";
 // ============================================
 // HELPERS
 // ============================================
+
+/** Stable JSON stringify (sorted keys) to avoid key-order sensitivity */
+function stableStringify(obj: unknown): string {
+  if (obj === null || obj === undefined) return "";
+  if (typeof obj !== "object") return JSON.stringify(obj);
+  return JSON.stringify(obj, Object.keys(obj as Record<string, unknown>).sort());
+}
 
 async function get<T>(action: string, params?: Record<string, string>): Promise<T> {
   const searchParams = new URLSearchParams({ action, ...params });
@@ -131,6 +137,9 @@ export function usePinnedWidgets() {
     ): Promise<PinnedWidget | null> => {
       if (!employeeId) return null;
 
+      // Lazy import to avoid circular dependency:
+      // component-registry → @/components/hr → CheckInOutCard → @/hooks → usePinnedWidgets
+      const { getDefaultLayout } = await import("@/lib/component-registry");
       const defaultLayout = getDefaultLayout(componentName);
 
       try {
@@ -197,6 +206,28 @@ export function usePinnedWidgets() {
     []
   );
 
+  /** Rename a pinned widget */
+  const rename = useCallback(
+    async (widgetId: string, newTitle: string): Promise<boolean> => {
+      try {
+        const { success } = await post<{ success: boolean }>("updateWidgetTitle", {
+          widgetId,
+          title: newTitle,
+        });
+        if (success) {
+          setWidgets((prev) =>
+            prev.map((w) => (w.id === widgetId ? { ...w, title: newTitle } : w))
+          );
+        }
+        return success;
+      } catch (err) {
+        console.error("[usePinnedWidgets] Rename error:", err);
+        return false;
+      }
+    },
+    []
+  );
+
   /** Batch-save layouts after a drag-end event */
   const batchSaveLayouts = useCallback(
     async (updates: Array<{ id: string; layout: GridLayout }>): Promise<boolean> => {
@@ -239,10 +270,11 @@ export function usePinnedWidgets() {
   /** Check if a specific component+queryDescriptor combo is already pinned */
   const isWidgetPinned = useCallback(
     (componentName: string, queryDescriptor: QueryDescriptor): boolean => {
+      const needle = stableStringify(queryDescriptor);
       return widgets.some(
         (w) =>
           w.componentName === componentName &&
-          JSON.stringify(w.queryDescriptor) === JSON.stringify(queryDescriptor)
+          stableStringify(w.queryDescriptor) === needle
       );
     },
     [widgets]
@@ -251,10 +283,11 @@ export function usePinnedWidgets() {
   /** Find the widget ID for a pinned component+queryDescriptor */
   const findWidgetId = useCallback(
     (componentName: string, queryDescriptor: QueryDescriptor): string | null => {
+      const needle = stableStringify(queryDescriptor);
       const widget = widgets.find(
         (w) =>
           w.componentName === componentName &&
-          JSON.stringify(w.queryDescriptor) === JSON.stringify(queryDescriptor)
+          stableStringify(w.queryDescriptor) === needle
       );
       return widget?.id ?? null;
     },
@@ -266,6 +299,7 @@ export function usePinnedWidgets() {
     isLoading,
     pin,
     unpin,
+    rename,
     updateLayout,
     batchSaveLayouts,
     clearAll,

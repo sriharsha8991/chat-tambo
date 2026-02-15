@@ -3,7 +3,7 @@
 import { usePinnedWidgets } from "@/hooks/usePinnedWidgets";
 import { WidgetWrapper } from "./WidgetWrapper";
 import type { PinnedWidget, GridLayout } from "@/types/dashboard";
-import { Loader2, LayoutDashboard, Trash2 } from "lucide-react";
+import { Loader2, LayoutDashboard, Trash2, RefreshCw } from "lucide-react";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Responsive,
@@ -37,11 +37,21 @@ export function PinnedDashboard({ className }: { className?: string }) {
     widgets,
     isLoading,
     unpin,
+    rename,
     batchSaveLayouts,
     clearAll,
   } = usePinnedWidgets();
 
   const [confirmClear, setConfirmClear] = useState(false);
+  const [isRefreshingAll, setIsRefreshingAll] = useState(false);
+
+  const handleRefreshAll = useCallback(() => {
+    setIsRefreshingAll(true);
+    // Dispatch the global event that all useLiveQuery instances listen to
+    window.dispatchEvent(new Event("hr-data-updated"));
+    // Reset the spinning state after a short delay
+    setTimeout(() => setIsRefreshingAll(false), 1500);
+  }, []);
 
   // Build react-grid-layout items from pinned widgets
   const layouts = useMemo(() => {
@@ -123,18 +133,28 @@ export function PinnedDashboard({ className }: { className?: string }) {
         <h2 className="text-sm font-medium text-muted-foreground">
           {widgets.length} pinned widget{widgets.length !== 1 && "s"}
         </h2>
-        <button
-          onClick={handleClearAll}
-          className={cn(
-            "inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-colors",
-            confirmClear
-              ? "bg-destructive text-destructive-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted",
-          )}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          {confirmClear ? "Click again to confirm" : "Clear all"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRefreshAll}
+            className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="Refresh all widgets"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isRefreshingAll && "animate-spin")} />
+            Refresh All
+          </button>
+          <button
+            onClick={handleClearAll}
+            className={cn(
+              "inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-colors",
+              confirmClear
+                ? "bg-destructive text-destructive-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted",
+            )}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {confirmClear ? "Click again to confirm" : "Clear all"}
+          </button>
+        </div>
       </div>
 
       <DashboardGrid
@@ -142,6 +162,7 @@ export function PinnedDashboard({ className }: { className?: string }) {
         layouts={layouts}
         onLayoutChange={handleLayoutChange}
         onUnpin={unpin}
+        onRename={rename}
       />
     </div>
   );
@@ -156,11 +177,13 @@ function DashboardGrid({
   layouts,
   onLayoutChange,
   onUnpin,
+  onRename,
 }: {
   widgets: PinnedWidget[];
   layouts: ResponsiveLayouts<DefaultBreakpoints>;
   onLayoutChange: (layout: Layout) => void;
   onUnpin: (widgetId: string) => void;
+  onRename: (widgetId: string, newTitle: string) => void;
 }) {
   const { containerRef, width } = useContainerWidth();
 
@@ -189,7 +212,7 @@ function DashboardGrid({
         >
           {widgets.map((widget) => (
             <div key={widget.id}>
-              <WidgetWrapper widget={widget} onUnpin={onUnpin} />
+              <WidgetWrapper widget={widget} onUnpin={onUnpin} onRename={onRename} />
             </div>
           ))}
         </Responsive>
@@ -216,5 +239,33 @@ function widgetToLayoutItem(widget: PinnedWidget): LayoutItem {
 
 function buildLayouts(widgets: PinnedWidget[]): ResponsiveLayouts<DefaultBreakpoints> {
   const lg = widgets.map(widgetToLayoutItem);
-  return { lg };
+
+  // Scale down layouts for smaller breakpoints
+  const md = lg.map((item) => ({
+    ...item,
+    w: Math.min(item.w, GRID_COLS.md),
+    x: Math.min(item.x, GRID_COLS.md - Math.min(item.w, GRID_COLS.md)),
+  }));
+
+  const sm = lg.map((item) => ({
+    ...item,
+    w: Math.min(item.w, GRID_COLS.sm),
+    x: 0, // Stack single-column-ish on small screens
+  }));
+
+  const xs = lg.map((item, i) => ({
+    ...item,
+    w: GRID_COLS.xs,
+    x: 0,
+    y: i * (item.h || 3), // Stack vertically
+  }));
+
+  const xxs = lg.map((item, i) => ({
+    ...item,
+    w: GRID_COLS.xxs,
+    x: 0,
+    y: i * (item.h || 3),
+  }));
+
+  return { lg, md, sm, xs, xxs };
 }

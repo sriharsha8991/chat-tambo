@@ -13,31 +13,13 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { QUERY_TABLE_MAP } from "@/lib/query-tables";
 import type { QueryResult } from "@/types/dashboard";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 // ============================================
-// TABLE MAPPING (client-side copy)
-// Must stay in sync with query-resolver.ts QUERY_TABLE_MAP
+// TABLE MAPPING — imported from shared module
 // ============================================
-
-const QUERY_TABLE_MAP: Record<string, string[]> = {
-  attendanceStatus: ["attendance"],
-  leaveBalance: ["leave_balances"],
-  requestStatus: ["leave_requests", "regularization_requests"],
-  pendingApprovals: ["leave_requests", "regularization_requests"],
-  teamMembers: ["attendance", "leave_requests", "employees"],
-  systemMetrics: ["employees", "attendance", "leave_requests", "regularization_requests"],
-  policies: ["policies"],
-  announcements: ["announcements"],
-  documents: ["documents", "document_acknowledgments"],
-  acknowledgedDocumentIds: ["document_acknowledgments"],
-  allEmployees: ["employees"],
-  attendanceTrends: ["attendance"],
-  leaveAnalytics: ["leave_requests", "leave_balances"],
-  teamMetrics: ["attendance", "leave_requests"],
-  hrAnalytics: ["employees"],
-};
 
 // ============================================
 // DEEP COMPARISON FOR PARAMS
