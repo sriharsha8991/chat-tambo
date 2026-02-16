@@ -78,20 +78,23 @@ Generative UI is bounded: the AI can only render components we register, keeping
 
 ```mermaid
 flowchart TD
-  User[User] --> UI[Chat UI + Persona Context]
-    UI --> Context["Context Helpers: persona, user, time"]
-  Context --> Tambo[Tambo Orchestrator]
-  Tambo --> Intent[Intent Selection]
-  Intent --> Registry[Component + Tool Registry]
+  User[User] --> Chat["Chat UI: ChatPage"]
+  Chat --> Tambo[Tambo Provider]
+  Persona[Persona Provider] --> Context["Context Helpers: persona, user, time"]
+  Context --> Tambo
+  Tambo --> Registry[Component + Tool Registry]
   Registry --> Schema[Zod Schema Validation]
   Schema --> Components[HR UI Components]
+  Components --> Chat
   Schema --> Tools[HR Tools]
-  Components --> UI
-  Tools --> Api[Next.js API /api/hr]
+  Tools --> Client[HR API Client]
+  Client --> Api[Next.js API /api/hr]
   Api --> Services[HR Unified Service]
-  Services --> Supabase[(Supabase DB)]
-  Supabase --> Realtime[Realtime Updates]
-  Realtime --> UI
+  Services --> Supabase[(Supabase)]
+  Supabase --> Realtime[Realtime Subscriptions]
+  Realtime --> Events["notifyDataUpdate event"]
+  Events --> Chat
+  Tools --> Events
 ```
 
 ## How To Run

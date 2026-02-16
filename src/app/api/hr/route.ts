@@ -128,6 +128,12 @@ export async function GET(request: NextRequest) {
       case "getBackendType":
         return NextResponse.json({ backend: hrService.getBackendType() });
 
+      case "getPinnedWidgets":
+        if (!employeeId) {
+          return NextResponse.json({ error: "employeeId required" }, { status: 400 });
+        }
+        return NextResponse.json(await hrService.getPinnedWidgets(employeeId));
+
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
@@ -338,6 +344,57 @@ export async function POST(request: NextRequest) {
         }
         await hrService.updateLeaveBalance(employeeId, leaveType, usedDays);
         return NextResponse.json({ success: true });
+      }
+
+      case "pinWidget": {
+        const { employeeId, componentName, queryDescriptor, layout, title } = data;
+        if (!employeeId || !componentName) {
+          return NextResponse.json({ error: "employeeId and componentName required" }, { status: 400 });
+        }
+        const widget = await hrService.pinWidget({
+          employeeId,
+          componentName,
+          queryDescriptor: queryDescriptor || {},
+          layout,
+          title,
+        });
+        return NextResponse.json(widget || { error: "Already pinned or failed" });
+      }
+
+      case "unpinWidget": {
+        const { widgetId } = data;
+        if (!widgetId) {
+          return NextResponse.json({ error: "widgetId required" }, { status: 400 });
+        }
+        const success = await hrService.unpinWidget(widgetId);
+        return NextResponse.json({ success });
+      }
+
+      case "updateWidgetLayout": {
+        const { widgetId, layout } = data;
+        if (!widgetId || !layout) {
+          return NextResponse.json({ error: "widgetId and layout required" }, { status: 400 });
+        }
+        const success = await hrService.updateWidgetLayout(widgetId, layout);
+        return NextResponse.json({ success });
+      }
+
+      case "batchUpdateWidgetLayouts": {
+        const { updates } = data;
+        if (!updates || !Array.isArray(updates)) {
+          return NextResponse.json({ error: "updates array required" }, { status: 400 });
+        }
+        const success = await hrService.batchUpdateWidgetLayouts(updates);
+        return NextResponse.json({ success });
+      }
+
+      case "clearAllPinnedWidgets": {
+        const { employeeId } = data;
+        if (!employeeId) {
+          return NextResponse.json({ error: "employeeId required" }, { status: 400 });
+        }
+        const success = await hrService.clearAllPinnedWidgets(employeeId);
+        return NextResponse.json({ success });
       }
 
       default:
