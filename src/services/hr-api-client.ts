@@ -7,43 +7,10 @@
  * file operations on the server.
  */
 
-const API_BASE = "/api/hr";
+import { apiGet as get, apiPost as post, notifyDataUpdate as _notifyDataUpdate } from "@/lib/api-client";
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-/**
- * Dispatch event to notify UI components that HR data has changed
- */
-export function notifyDataUpdate(): void {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("hr-data-updated"));
-  }
-}
-
-async function get<T>(action: string, params?: Record<string, string>): Promise<T> {
-  const searchParams = new URLSearchParams({ action, ...params });
-  const response = await fetch(`${API_BASE}?${searchParams.toString()}`);
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "API request failed");
-  }
-  return response.json();
-}
-
-async function post<T>(action: string, data: Record<string, unknown>): Promise<T> {
-  const response = await fetch(API_BASE, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, ...data }),
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "API request failed");
-  }
-  return response.json();
-}
+// Re-export for consumers
+export const notifyDataUpdate = _notifyDataUpdate;
 
 // ============================================
 // EMPLOYEE OPERATIONS

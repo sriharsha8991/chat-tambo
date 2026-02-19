@@ -26,8 +26,10 @@ import {
   DocumentCenter,
   PolicyManager,
   SalarySlipForm,
+  EmployeeDirectory,
 } from "@/components/hr";
-import type { ComponentRegistryEntry, GridLayout } from "@/types/dashboard";
+import type { ComponentRegistryEntry, GridLayout, QueryDescriptor } from "@/types/dashboard";
+import type { PersonaRole } from "@/types/hr";
 
 // ============================================
 // REGISTRY
@@ -142,6 +144,12 @@ export const componentRegistry: Record<string, ComponentRegistryEntry> = {
     label: "Policy Manager",
     persona: ["hr"],
   },
+  EmployeeDirectory: {
+    component: EmployeeDirectory,
+    defaultLayout: { x: 0, y: 0, w: 12, h: 5, minW: 6, minH: 3 },
+    label: "Employee Directory",
+    persona: ["hr", "manager"],
+  },
 };
 
 // ============================================
@@ -168,4 +176,96 @@ export function getRegisteredComponentNames(): string[] {
 /** Get display label for a component */
 export function getComponentLabel(name: string): string {
   return componentRegistry[name]?.label ?? name;
+}
+
+// ============================================
+// DASHBOARD PRESET TEMPLATES
+// ============================================
+
+interface PresetWidget {
+  componentName: string;
+  queryDescriptor: QueryDescriptor;
+  layout: GridLayout;
+  title?: string;
+}
+
+/**
+ * Default dashboard widgets per persona.
+ * Used to seed a new user's dashboard on first visit.
+ */
+const dashboardPresets: Record<PersonaRole, PresetWidget[]> = {
+  employee: [
+    {
+      componentName: "CheckInOutCard",
+      queryDescriptor: { queryId: "attendanceStatus", params: {} },
+      layout: { x: 0, y: 0, w: 4, h: 3 },
+      title: "Check In / Out",
+    },
+    {
+      componentName: "LeaveBalanceCard",
+      queryDescriptor: { queryId: "leaveBalance", params: {} },
+      layout: { x: 4, y: 0, w: 4, h: 3 },
+      title: "Leave Balance",
+    },
+    {
+      componentName: "RequestStatusList",
+      queryDescriptor: { queryId: "requestStatus", params: {} },
+      layout: { x: 8, y: 0, w: 4, h: 3 },
+      title: "My Requests",
+    },
+    {
+      componentName: "AnnouncementsFeed",
+      queryDescriptor: { queryId: "announcements", params: {} },
+      layout: { x: 0, y: 3, w: 6, h: 4 },
+      title: "Announcements",
+    },
+  ],
+  manager: [
+    {
+      componentName: "ApprovalQueue",
+      queryDescriptor: { queryId: "pendingApprovals", params: {} },
+      layout: { x: 0, y: 0, w: 6, h: 5 },
+      title: "Pending Approvals",
+    },
+    {
+      componentName: "TeamOverview",
+      queryDescriptor: { queryId: "teamMembers", params: {} },
+      layout: { x: 6, y: 0, w: 6, h: 4 },
+      title: "Team Overview",
+    },
+    {
+      componentName: "AnnouncementsFeed",
+      queryDescriptor: { queryId: "announcements", params: {} },
+      layout: { x: 0, y: 5, w: 6, h: 4 },
+      title: "Announcements",
+    },
+  ],
+  hr: [
+    {
+      componentName: "SystemDashboard",
+      queryDescriptor: { queryId: "systemMetrics", params: {} },
+      layout: { x: 0, y: 0, w: 12, h: 3 },
+      title: "System Metrics",
+    },
+    {
+      componentName: "ApprovalQueue",
+      queryDescriptor: { queryId: "pendingApprovals", params: {} },
+      layout: { x: 0, y: 3, w: 6, h: 5 },
+      title: "Pending Approvals",
+    },
+    {
+      componentName: "Graph",
+      queryDescriptor: {
+        queryId: "hrAnalytics",
+        params: { metric: "departmentDistribution" },
+      },
+      layout: { x: 6, y: 3, w: 6, h: 4 },
+      title: "Department Distribution",
+    },
+  ],
+};
+
+/** Get the preset dashboard template for a persona */
+export function getDashboardPreset(persona: PersonaRole): PresetWidget[] {
+  return dashboardPresets[persona] ?? [];
 }

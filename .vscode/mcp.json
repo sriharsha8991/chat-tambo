@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "drawio": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "drawio-mcp-server@1.7.0"
+      ]
+    }
+  }
+}

@@ -112,6 +112,25 @@ export async function unpinWidget(widgetId: string): Promise<boolean> {
 // UPDATE LAYOUT (after drag/resize)
 // ============================================
 
+export async function updateWidgetTitle(
+  widgetId: string,
+  title: string
+): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+
+  const { error } = await getDb()
+    .from('pinned_widgets')
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq('id', widgetId);
+
+  if (error) {
+    console.error('Error updating widget title:', error);
+    return false;
+  }
+
+  return true;
+}
+
 export async function updateWidgetLayout(
   widgetId: string,
   layout: Record<string, unknown>

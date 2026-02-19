@@ -43,6 +43,11 @@ export async function getAllEmployees() {
   return supabaseHR.getAllEmployees();
 }
 
+export async function getPersonaUsers() {
+  requireSupabase();
+  return supabaseHR.getPersonaUsers();
+}
+
 // ============================================
 // TEAM OPERATIONS
 // ============================================
@@ -478,6 +483,11 @@ export async function unpinWidget(widgetId: string) {
 export async function updateWidgetLayout(widgetId: string, layout: Record<string, unknown>) {
   requireSupabase();
   return supabaseHR.updateWidgetLayout(widgetId, layout);
+}
+
+export async function updateWidgetTitle(widgetId: string, title: string) {
+  requireSupabase();
+  return supabaseHR.updateWidgetTitle(widgetId, title);
 }
 
 export async function batchUpdateWidgetLayouts(

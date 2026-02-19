@@ -2,7 +2,6 @@
 
 import { TopBar } from "./TopBar";
 import { ChatPanel } from "./ChatPanel";
-import { ProactiveDashboard } from "./ProactiveDashboard";
 
 interface AppShellProps {
   children?: React.ReactNode;
@@ -17,7 +16,7 @@ export function AppShell({ children }: AppShellProps) {
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Dashboard / Main Content */}
-        {children || <ProactiveDashboard />}
+        {children}
 
         {/* Chat Panel */}
         <ChatPanel />
@@ -29,4 +28,3 @@ export function AppShell({ children }: AppShellProps) {
 // Export all layout components
 export { TopBar } from "./TopBar";
 export { ChatPanel } from "./ChatPanel";
-export { ProactiveDashboard } from "./ProactiveDashboard";

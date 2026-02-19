@@ -4,28 +4,14 @@
  *
  * This file registers all HR components and tools for the Zoho People
  * Generative UI workspace. Components are organized by persona.
+ *
+ * Component references and dashboard metadata (layout, label, persona)
+ * live in component-registry.ts — this file adds only AI-specific
+ * metadata (description, propsSchema) on top.
  */
 
-import { Graph, graphSchema } from "@/components/tambo/graph";
-import {
-  CheckInOutCard,
-  LeaveBalanceCard,
-  LeaveRequestForm,
-  RequestStatusList,
-  AttendanceTimeline,
-  RegularizationForm,
-  ApprovalQueue,
-  TeamOverview,
-  ApprovalDetail,
-  SystemDashboard,
-  PolicyViewer,
-  AnnouncementsFeed,
-  DocumentsAcknowledgeList,
-  AnnouncementBoard,
-  DocumentCenter,
-  PolicyManager,
-  SalarySlipForm,
-} from "@/components/hr";
+import { graphSchema } from "@/components/tambo/graph";
+import { componentRegistry } from "@/lib/component-registry";
 import {
   getAttendanceStatus,
   submitCheckInOut,
@@ -43,6 +29,11 @@ import {
 import type { TamboComponent } from "@tambo-ai/react";
 import { TamboTool } from "@tambo-ai/react";
 import { z } from "zod";
+
+/** Shorthand to get a component reference from the unified registry */
+function comp(name: string) {
+  return componentRegistry[name]?.component;
+}
 
 // ============================================
 // TAMBO TOOLS - HR Operations
@@ -199,6 +190,7 @@ export const tools: TamboTool[] = [
       type: z.enum(["leave", "regularization", "wfh"]).optional().describe("Type of approval when known"),
       action: z.enum(["approve", "reject"]).describe("Whether to approve or reject"),
       comment: z.string().optional().describe("Optional comment for the decision"),
+      managerId: z.string().optional().describe("ID of the manager processing the approval. If not provided, the current user's ID will be used."),
     }),
     outputSchema: z.object({
       success: z.boolean(),
@@ -235,6 +227,8 @@ export const tools: TamboTool[] = [
     tool: getAttendanceTrends,
     inputSchema: z.object({
       period: z.enum(["week", "month"]).optional().describe("Time period for trends (week or month)"),
+      startDate: z.string().optional().describe("Start date for custom range (YYYY-MM-DD)"),
+      endDate: z.string().optional().describe("End date for custom range (YYYY-MM-DD)"),
       employeeId: z.string().optional().describe("Filter by employee ID"),
       department: z.string().optional().describe("Filter by department"),
     }),
@@ -256,6 +250,8 @@ export const tools: TamboTool[] = [
     tool: getLeaveAnalytics,
     inputSchema: z.object({
       type: z.enum(["distribution", "usage"]).optional().describe("Type of analytics - distribution (pie) or usage (line)"),
+      startDate: z.string().optional().describe("Start date for custom range (YYYY-MM-DD)"),
+      endDate: z.string().optional().describe("End date for custom range (YYYY-MM-DD)"),
       employeeId: z.string().optional().describe("Filter by employee ID"),
       department: z.string().optional().describe("Filter by department"),
     }),
@@ -324,7 +320,7 @@ export const components: TamboComponent[] = [
       "A component that renders various types of charts (bar, line, area, pie) for " +
       "visualizing attendance trends, leave usage, team metrics, and other HR data. " +
       "Use for showing attendance over time, leave balance distribution, or team statistics.",
-    component: Graph,
+    component: comp("Graph"),
     propsSchema: graphSchema,
   },
 
@@ -337,8 +333,9 @@ export const components: TamboComponent[] = [
       "A card component for employee check-in and check-out. Shows current status, " +
       "check-in/out times, and total hours worked. Use when displaying today's attendance " +
       "or when employee needs to check in/out.",
-    component: CheckInOutCard,
+    component: comp("CheckInOutCard"),
     propsSchema: z.object({
+      employeeId: z.string().optional().describe("Employee ID for check-in/out actions"),
       checkInTime: z.string().optional().describe("Check-in time (HH:MM:SS format)"),
       checkOutTime: z.string().optional().describe("Check-out time (HH:MM:SS format)"),
       status: z.enum(["not_checked_in", "checked_in", "checked_out"])
@@ -352,7 +349,7 @@ export const components: TamboComponent[] = [
       "A card showing all leave balances for an employee with progress bars. Displays " +
       "casual, sick, earned, WFH, and comp-off balances. Use when employee asks about " +
       "their leave balance or available leaves.",
-    component: LeaveBalanceCard,
+    component: comp("LeaveBalanceCard"),
     propsSchema: z.object({
       balances: z.array(z.object({
         leaveType: z.string().describe("Type of leave (casual, sick, earned, wfh, comp_off)"),
@@ -368,7 +365,7 @@ export const components: TamboComponent[] = [
     description:
       "A form for submitting leave requests. Includes leave type selection, date range picker, " +
       "and reason field. Use when employee wants to apply for leave or time off.",
-    component: LeaveRequestForm,
+    component: comp("LeaveRequestForm"),
     propsSchema: z.object({
       balances: z.array(z.object({
         leaveType: z.string(),
@@ -385,7 +382,7 @@ export const components: TamboComponent[] = [
     description:
       "A quick form to download salary slips for a single month or multiple months. " +
       "Use when a user asks for salary slips or monthly payslips.",
-    component: SalarySlipForm,
+    component: comp("SalarySlipForm"),
     propsSchema: z.object({
       employeeName: z.string().optional().describe("Employee name to show on the slip"),
       employeeId: z.string().optional().describe("Employee ID to show on the slip"),
@@ -400,7 +397,7 @@ export const components: TamboComponent[] = [
     description:
       "A list showing the status of employee's pending and past requests (leave, regularization). " +
       "Use when employee wants to see their request history or check approval status.",
-    component: RequestStatusList,
+    component: comp("RequestStatusList"),
     propsSchema: z.object({
       requests: z.array(z.object({
         id: z.string().describe("Request ID"),
@@ -418,7 +415,7 @@ export const components: TamboComponent[] = [
     description:
       "A timeline view of attendance history showing check-in/out times, status, and hours " +
       "for recent days. Use when showing attendance history or weekly/monthly attendance.",
-    component: AttendanceTimeline,
+    component: comp("AttendanceTimeline"),
     propsSchema: z.object({
       records: z.array(z.object({
         date: z.string().describe("Date (YYYY-MM-DD)"),
@@ -437,7 +434,7 @@ export const components: TamboComponent[] = [
     description:
       "A form for submitting attendance regularization requests. Use when employee missed " +
       "check-in/out and needs to regularize their attendance.",
-    component: RegularizationForm,
+    component: comp("RegularizationForm"),
     propsSchema: z.object({}),
   },
 
@@ -449,7 +446,7 @@ export const components: TamboComponent[] = [
     description:
       "A list of pending approval items for managers showing leave requests and regularizations " +
       "from team members. Use when manager asks about pending approvals or team requests.",
-    component: ApprovalQueue,
+    component: comp("ApprovalQueue"),
     propsSchema: z.object({
       approvals: z.array(z.object({
         id: z.string().describe("Approval item ID"),
@@ -469,7 +466,7 @@ export const components: TamboComponent[] = [
     description:
       "A dashboard showing team members and their current status (in office, WFH, on leave). " +
       "Use when manager wants to see team availability or who is working today.",
-    component: TeamOverview,
+    component: comp("TeamOverview"),
     propsSchema: z.object({
       members: z.array(z.object({
         id: z.string().describe("Member ID"),
@@ -488,7 +485,7 @@ export const components: TamboComponent[] = [
     description:
       "Detailed view of a single approval item with employee info and approve/reject buttons. " +
       "Use when manager wants to review and act on a specific request.",
-    component: ApprovalDetail,
+    component: comp("ApprovalDetail"),
     propsSchema: z.object({
       approval: z.object({
         id: z.string(),
@@ -513,7 +510,7 @@ export const components: TamboComponent[] = [
     description:
       "HR system dashboard showing key metrics like total employees, present today, " +
       "on leave, pending approvals, compliance score, and escalations. Use for HR admins.",
-    component: SystemDashboard,
+    component: comp("SystemDashboard"),
     propsSchema: z.object({
       metrics: z.object({
         totalEmployees: z.number().describe("Total employee count"),
@@ -538,7 +535,7 @@ export const components: TamboComponent[] = [
     description:
       "A searchable viewer for HR policies and documents. Shows leave policy, attendance rules, " +
       "WFH guidelines, etc. Use when anyone asks about company policies or HR rules.",
-    component: PolicyViewer,
+    component: comp("PolicyViewer"),
     propsSchema: z.object({
       policies: z.array(z.object({
         id: z.string().describe("Policy ID"),
@@ -562,7 +559,7 @@ export const components: TamboComponent[] = [
     name: "AnnouncementsFeed",
     description:
       "A feed of HR announcements with pinned items. Use when users ask for latest HR updates.",
-    component: AnnouncementsFeed,
+    component: comp("AnnouncementsFeed"),
     propsSchema: z.object({
       announcements: z.array(z.object({
         id: z.string(),
@@ -588,7 +585,7 @@ export const components: TamboComponent[] = [
     name: "DocumentsAcknowledgeList",
     description:
       "A list of documents with optional acknowledgment actions. Use when showing required reads.",
-    component: DocumentsAcknowledgeList,
+    component: comp("DocumentsAcknowledgeList"),
     propsSchema: z.object({
       documents: z.array(z.object({
         id: z.string(),
@@ -618,7 +615,7 @@ export const components: TamboComponent[] = [
     name: "AnnouncementBoard",
     description:
       "HR admin board for creating and managing announcements.",
-    component: AnnouncementBoard,
+    component: comp("AnnouncementBoard"),
     propsSchema: z.object({
       announcements: z.array(z.object({
         id: z.string(),
@@ -642,7 +639,7 @@ export const components: TamboComponent[] = [
     name: "DocumentCenter",
     description:
       "HR admin document center for uploading PDFs and managing document list.",
-    component: DocumentCenter,
+    component: comp("DocumentCenter"),
     propsSchema: z.object({
       documents: z.array(z.object({
         id: z.string(),
@@ -667,7 +664,7 @@ export const components: TamboComponent[] = [
     name: "PolicyManager",
     description:
       "HR admin policy manager for creating, editing, and deleting policies.",
-    component: PolicyManager,
+    component: comp("PolicyManager"),
     propsSchema: z.object({
       policies: z.array(z.object({
         id: z.string(),
@@ -685,6 +682,23 @@ export const components: TamboComponent[] = [
         title: z.string().optional(),
         description: z.string().optional(),
       }).optional().describe("Empty state copy"),
+    }),
+  },
+
+  // ============================================
+  // DIRECTORY COMPONENTS
+  // ============================================
+  {
+    name: "EmployeeDirectory",
+    description:
+      "Searchable employee directory showing all employees grouped by department. " +
+      "Displays name, email, role, and employee ID. Can be filtered by department or role. " +
+      "Use when user asks to see the team directory, employee list, or find someone.",
+    component: comp("EmployeeDirectory"),
+    propsSchema: z.object({
+      department: z.string().optional().describe("Filter by department name"),
+      role: z.enum(["employee", "manager", "hr"]).optional().describe("Filter by role"),
+      maxItems: z.number().optional().describe("Max employees to show"),
     }),
   },
 ];

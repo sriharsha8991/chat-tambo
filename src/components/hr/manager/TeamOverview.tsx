@@ -149,7 +149,7 @@ export function TeamOverview({ members = [], onMemberClick }: TeamOverviewProps)
         {/* Member List */}
         <ScrollArea className="max-h-[300px]">
           <div className="space-y-2">
-            {members.map((member) => {
+            {members.map((member, index) => {
               // Determine actual status
               const actualStatus = resolveStatusKey(
                 member.status,
@@ -160,7 +160,7 @@ export function TeamOverview({ members = [], onMemberClick }: TeamOverviewProps)
 
               return (
                 <div
-                  key={member.id}
+                  key={member.id || member.employeeId || `member-${index}`}
                   className="flex items-center gap-3 rounded-lg border p-2 transition-colors hover:bg-muted/50 cursor-pointer"
                   onClick={() => onMemberClick?.(member)}
                 >

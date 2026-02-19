@@ -10,38 +10,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { usePersona } from "@/contexts/PersonaContext";
 import { supabase } from "@/lib/supabase";
-import { getDefaultLayout } from "@/lib/component-registry";
+import { apiGet as get, apiPost as post, stableStringify } from "@/lib/api-client";
 import type { PinnedWidget, QueryDescriptor, GridLayout } from "@/types/dashboard";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-
-const API_BASE = "/api/hr";
 
 // ============================================
 // HELPERS
 // ============================================
-
-async function get<T>(action: string, params?: Record<string, string>): Promise<T> {
-  const searchParams = new URLSearchParams({ action, ...params });
-  const response = await fetch(`${API_BASE}?${searchParams.toString()}`);
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "API request failed");
-  }
-  return response.json();
-}
-
-async function post<T>(action: string, data: Record<string, unknown>): Promise<T> {
-  const response = await fetch(API_BASE, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, ...data }),
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "API request failed");
-  }
-  return response.json();
-}
 
 /** Convert snake_case DB row to camelCase PinnedWidget */
 function rowToWidget(row: Record<string, unknown>): PinnedWidget {
@@ -63,10 +38,11 @@ function rowToWidget(row: Record<string, unknown>): PinnedWidget {
 // ============================================
 
 export function usePinnedWidgets() {
-  const { currentUser } = usePersona();
+  const { currentUser, currentPersona } = usePersona();
   const [widgets, setWidgets] = useState<PinnedWidget[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const seededRef = useRef(false);
 
   const employeeId = currentUser?.id || currentUser?.employeeId;
 
@@ -79,13 +55,37 @@ export function usePinnedWidgets() {
       const rows = await get<Array<Record<string, unknown>>>("getPinnedWidgets", {
         employeeId,
       });
-      setWidgets(rows.map(rowToWidget));
+      const fetched = rows.map(rowToWidget);
+      setWidgets(fetched);
+
+      // Auto-seed preset dashboard if the user has zero widgets
+      if (fetched.length === 0 && !seededRef.current) {
+        seededRef.current = true;
+        const { getDashboardPreset } = await import("@/lib/component-registry");
+        const presets = getDashboardPreset(currentPersona);
+        for (const preset of presets) {
+          try {
+            const result = await post<Record<string, unknown>>("pinWidget", {
+              employeeId,
+              componentName: preset.componentName,
+              queryDescriptor: preset.queryDescriptor,
+              layout: preset.layout,
+              title: preset.title || null,
+            });
+            if (result && !result.error) {
+              setWidgets((prev) => [...prev, rowToWidget(result)]);
+            }
+          } catch {
+            // best-effort seeding
+          }
+        }
+      }
     } catch (err) {
       console.error("[usePinnedWidgets] Fetch error:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [employeeId]);
+  }, [employeeId, currentPersona]);
 
   // Load on mount
   useEffect(() => {
@@ -131,6 +131,9 @@ export function usePinnedWidgets() {
     ): Promise<PinnedWidget | null> => {
       if (!employeeId) return null;
 
+      // Lazy import to avoid circular dependency:
+      // component-registry → @/components/hr → CheckInOutCard → @/hooks → usePinnedWidgets
+      const { getDefaultLayout } = await import("@/lib/component-registry");
       const defaultLayout = getDefaultLayout(componentName);
 
       try {
@@ -197,6 +200,28 @@ export function usePinnedWidgets() {
     []
   );
 
+  /** Rename a pinned widget */
+  const rename = useCallback(
+    async (widgetId: string, newTitle: string): Promise<boolean> => {
+      try {
+        const { success } = await post<{ success: boolean }>("updateWidgetTitle", {
+          widgetId,
+          title: newTitle,
+        });
+        if (success) {
+          setWidgets((prev) =>
+            prev.map((w) => (w.id === widgetId ? { ...w, title: newTitle } : w))
+          );
+        }
+        return success;
+      } catch (err) {
+        console.error("[usePinnedWidgets] Rename error:", err);
+        return false;
+      }
+    },
+    []
+  );
+
   /** Batch-save layouts after a drag-end event */
   const batchSaveLayouts = useCallback(
     async (updates: Array<{ id: string; layout: GridLayout }>): Promise<boolean> => {
@@ -239,10 +264,11 @@ export function usePinnedWidgets() {
   /** Check if a specific component+queryDescriptor combo is already pinned */
   const isWidgetPinned = useCallback(
     (componentName: string, queryDescriptor: QueryDescriptor): boolean => {
+      const needle = stableStringify(queryDescriptor);
       return widgets.some(
         (w) =>
           w.componentName === componentName &&
-          JSON.stringify(w.queryDescriptor) === JSON.stringify(queryDescriptor)
+          stableStringify(w.queryDescriptor) === needle
       );
     },
     [widgets]
@@ -251,10 +277,11 @@ export function usePinnedWidgets() {
   /** Find the widget ID for a pinned component+queryDescriptor */
   const findWidgetId = useCallback(
     (componentName: string, queryDescriptor: QueryDescriptor): string | null => {
+      const needle = stableStringify(queryDescriptor);
       const widget = widgets.find(
         (w) =>
           w.componentName === componentName &&
-          JSON.stringify(w.queryDescriptor) === JSON.stringify(queryDescriptor)
+          stableStringify(w.queryDescriptor) === needle
       );
       return widget?.id ?? null;
     },
@@ -266,6 +293,7 @@ export function usePinnedWidgets() {
     isLoading,
     pin,
     unpin,
+    rename,
     updateLayout,
     batchSaveLayouts,
     clearAll,

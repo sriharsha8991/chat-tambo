@@ -49,7 +49,9 @@ import {
   MessageCircle,
   FileText,
   ClipboardList,
+  LayoutDashboard,
 } from "lucide-react";
+import Link from "next/link";
 
 const personaConfig = {
   employee: {
@@ -272,6 +274,13 @@ export function ChatPage({ showSidebar = true }: ChatPageProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Dashboard Link */}
+          <Link href="/dashboard">
+            <Button variant="outline" size="sm" className="gap-1.5 h-9 border-border/50 hover:bg-muted/50 text-sm font-medium">
+              <LayoutDashboard className="h-4 w-4" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </Button>
+          </Link>
           <NotifierBell />
           {/* Persona Switcher */}
           <DropdownMenu>

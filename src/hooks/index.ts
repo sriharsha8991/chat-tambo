@@ -4,5 +4,6 @@
  */
 
 export { useHRActions, type ActionResult, type UseHRActionsReturn } from "./useHRActions";
-export { useLiveQuery } from "./useLiveQuery";
+export { useLiveQuery, refreshAllWidgets } from "./useLiveQuery";
 export { usePinnedWidgets } from "./usePinnedWidgets";
+export { useAsyncAction } from "./useAsyncAction";

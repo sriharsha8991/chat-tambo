@@ -55,7 +55,9 @@ export function DocumentCenter({
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return "—";
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",

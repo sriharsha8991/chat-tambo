@@ -3,7 +3,8 @@
  *
  * Fetches data via the /api/query endpoint using a queryId + params,
  * then subscribes to Supabase realtime changes on the relevant tables
- * and the global "hr-data-updated" event to auto-refresh.
+ * (via the shared RealtimeManager singleton) and the global
+ * "hr-data-updated" event to auto-refresh.
  *
  * Both chat-rendered and dashboard-rendered components share this hook
  * so they always display live data.
@@ -12,32 +13,25 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { supabase } from "@/lib/supabase";
+import { QUERY_TABLE_MAP } from "@/lib/query-tables";
+import { subscribe, type HRTable } from "@/lib/realtime-manager";
 import type { QueryResult } from "@/types/dashboard";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 
 // ============================================
-// TABLE MAPPING (client-side copy)
-// Must stay in sync with query-resolver.ts QUERY_TABLE_MAP
+// GLOBAL REFRESH REGISTRY
 // ============================================
 
-const QUERY_TABLE_MAP: Record<string, string[]> = {
-  attendanceStatus: ["attendance"],
-  leaveBalance: ["leave_balances"],
-  requestStatus: ["leave_requests", "regularization_requests"],
-  pendingApprovals: ["leave_requests", "regularization_requests"],
-  teamMembers: ["attendance", "leave_requests", "employees"],
-  systemMetrics: ["employees", "attendance", "leave_requests", "regularization_requests"],
-  policies: ["policies"],
-  announcements: ["announcements"],
-  documents: ["documents", "document_acknowledgments"],
-  acknowledgedDocumentIds: ["document_acknowledgments"],
-  allEmployees: ["employees"],
-  attendanceTrends: ["attendance"],
-  leaveAnalytics: ["leave_requests", "leave_balances"],
-  teamMetrics: ["attendance", "leave_requests"],
-  hrAnalytics: ["employees"],
-};
+/** All mounted useLiveQuery instances register their fetchData here. */
+const refreshRegistry = new Set<() => Promise<void>>();
+
+/**
+ * Invoke every registered widget's fetch and await completion.
+ * Returns after all settle (success or failure).
+ */
+export async function refreshAllWidgets(): Promise<void> {
+  const tasks = Array.from(refreshRegistry).map((fn) => fn());
+  await Promise.allSettled(tasks);
+}
 
 // ============================================
 // DEEP COMPARISON FOR PARAMS
@@ -67,7 +61,6 @@ export function useLiveQuery<T = unknown>(
     paramsRef.current = params;
   }
 
-  const channelsRef = useRef<RealtimeChannel[]>([]);
   const isMountedRef = useRef(true);
 
   // Fetch data from /api/query
@@ -103,6 +96,14 @@ export function useLiveQuery<T = unknown>(
     }
   }, [queryId, paramsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Register in the global refresh registry
+  useEffect(() => {
+    refreshRegistry.add(fetchData);
+    return () => {
+      refreshRegistry.delete(fetchData);
+    };
+  }, [fetchData]);
+
   // Initial fetch + refetch on queryId/params change
   useEffect(() => {
     isMountedRef.current = true;
@@ -112,45 +113,24 @@ export function useLiveQuery<T = unknown>(
     };
   }, [fetchData]);
 
-  // Subscribe to Supabase realtime for relevant tables
+  // Subscribe to Supabase realtime via shared RealtimeManager
   useEffect(() => {
-    if (!supabase || !queryId) return;
+    if (!queryId) return;
 
     const tables = QUERY_TABLE_MAP[queryId] ?? [];
     if (tables.length === 0) return;
 
-    // Deduplicate table names
-    const uniqueTables = [...new Set(tables)];
+    const uniqueTables = [...new Set(tables)] as HRTable[];
+    const unsubs = uniqueTables.map((table) =>
+      subscribe(table, () => fetchData()),
+    );
 
-    for (const table of uniqueTables) {
-      const channel = supabase
-        .channel(`live-query-${queryId}-${table}-${paramsKey}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table },
-          () => {
-            console.log(`[useLiveQuery] Realtime change on ${table}, refreshing ${queryId}`);
-            fetchData();
-          }
-        )
-        .subscribe();
-
-      channelsRef.current.push(channel);
-    }
-
-    return () => {
-      channelsRef.current.forEach((ch) => supabase?.removeChannel(ch));
-      channelsRef.current = [];
-    };
+    return () => unsubs.forEach((u) => u());
   }, [queryId, paramsKey, fetchData]);
 
   // Also listen for the global "hr-data-updated" event
   useEffect(() => {
-    const handler = () => {
-      console.log(`[useLiveQuery] hr-data-updated event, refreshing ${queryId}`);
-      fetchData();
-    };
-
+    const handler = () => fetchData();
     window.addEventListener("hr-data-updated", handler);
     return () => window.removeEventListener("hr-data-updated", handler);
   }, [queryId, fetchData]);

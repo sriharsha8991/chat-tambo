@@ -122,6 +122,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(await hrService.getAcknowledgedDocumentIds(employeeId));
       }
 
+      case "getPersonaUsers":
+        return NextResponse.json(await hrService.getPersonaUsers());
+
       case "getSystemMetrics":
         return NextResponse.json(await hrService.getSystemMetrics());
 
@@ -376,6 +379,15 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "widgetId and layout required" }, { status: 400 });
         }
         const success = await hrService.updateWidgetLayout(widgetId, layout);
+        return NextResponse.json({ success });
+      }
+
+      case "updateWidgetTitle": {
+        const { widgetId, title } = data;
+        if (!widgetId || title === undefined) {
+          return NextResponse.json({ error: "widgetId and title required" }, { status: 400 });
+        }
+        const success = await hrService.updateWidgetTitle(widgetId, title);
         return NextResponse.json({ success });
       }
 

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
 import type { PersonaRole, UserProfile, UserContext } from "@/types/hr";
-import { getAllEmployees } from "@/services/hr-api-client";
+import { apiGet } from "@/lib/api-client";
 
 interface PersonaContextValue {
   // Current persona and user
@@ -54,13 +54,36 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [userContextState, setUserContextState] = useState<UserContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const employeesLoadedRef = React.useRef(false);
 
   useEffect(() => {
+    // Skip re-fetching if already loaded
+    if (employeesLoadedRef.current) {
+      // Just switch persona with existing data
+      const nextUser = usersByRole[currentPersona];
+      if (nextUser) {
+        setCurrentUser(nextUser);
+        setUserContextState(getInitialUserContext(nextUser));
+      }
+      return;
+    }
+
     let isMounted = true;
 
     const loadUsers = async () => {
       try {
-        const employees = await getAllEmployees();
+        // Fetch only one representative per role (3 rows instead of all)
+        const employees = await apiGet<Array<{
+          id: string;
+          employee_id?: string;
+          employeeId?: string;
+          name: string;
+          email: string;
+          role: "employee" | "manager" | "hr";
+          department: string;
+          manager_id?: string | null;
+          managerId?: string | null;
+        }>>("getPersonaUsers");
         const mapped = employees.map((employee) => ({
           id: employee.id,
           employeeId: employee.employeeId || employee.employee_id || employee.id,
@@ -83,6 +106,7 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
           const initialUser = nextUsers[currentPersona] || mapped[0] || null;
           setCurrentUser(initialUser);
           setUserContextState(initialUser ? getInitialUserContext(initialUser) : null);
+          employeesLoadedRef.current = true;
         }
       } catch (error) {
         console.error("Failed to load personas:", error);

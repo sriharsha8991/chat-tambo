@@ -15,6 +15,7 @@ export {
   AttendanceTimeline,
   RegularizationForm,
 } from "./employee";
+export { EmployeeDirectory } from "./employee/EmployeeDirectory";
 
 // Manager components
 export {
