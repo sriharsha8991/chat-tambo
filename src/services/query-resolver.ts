@@ -21,29 +21,174 @@ import { QUERY_TABLE_MAP } from "@/lib/query-tables";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type QueryFn = (params: any) => Promise<unknown>;
 
-const QUERY_REGISTRY: Record<string, QueryFn> = {
-  // Employee queries
-  attendanceStatus: (p) => unified.getTodayAttendance(p?.employeeId),
-  leaveBalance: (p) => unified.getLeaveBalances(p?.employeeId),
-  requestStatus: (p) => unified.getLeaveRequests(p?.employeeId),
+// ============================================
+// LEAVE TYPE LABELS
+// ============================================
 
-  // Manager queries
+const LEAVE_TYPE_LABELS: Record<string, string> = {
+  casual: "Casual Leave",
+  sick: "Sick Leave",
+  earned: "Earned Leave",
+  compensatory: "Compensatory Off",
+  maternity: "Maternity Leave",
+  paternity: "Paternity Leave",
+  unpaid: "Unpaid Leave",
+};
+
+// ============================================
+// QUERY REGISTRY
+// ============================================
+
+const QUERY_REGISTRY: Record<string, QueryFn> = {
+  // ── Employee queries ──────────────────────────────
+
+  /**
+   * attendanceStatus — returns { records, todayStatus }
+   * Fetches both the full attendance history (for AttendanceTimeline)
+   * and today's status (for CheckInOutCard).
+   */
+  attendanceStatus: async (p) => {
+    const [todayRecord, records] = await Promise.all([
+      unified.getTodayAttendance(p?.employeeId),
+      unified.getAttendanceRecords(p?.employeeId),
+    ]);
+
+    const todayStatus = todayRecord
+      ? {
+          isCheckedIn: !!todayRecord.check_in,
+          checkInTime: todayRecord.check_in || undefined,
+          checkOutTime: todayRecord.check_out || undefined,
+          hasMissedCheckout:
+            !!todayRecord.check_in &&
+            !todayRecord.check_out &&
+            todayRecord.status === "present",
+        }
+      : {
+          isCheckedIn: false,
+          checkInTime: undefined,
+          checkOutTime: undefined,
+          hasMissedCheckout: false,
+        };
+
+    return {
+      records: (records || []).map((r: any) => ({
+        date: r.date,
+        checkIn: r.check_in || undefined,
+        checkOut: r.check_out || undefined,
+        status: r.status,
+        hoursWorked: r.hours_worked,
+      })),
+      todayStatus,
+    };
+  },
+
+  /**
+   * leaveBalance — transforms snake_case DB rows to camelCase
+   * with human-readable labels for the LeaveBalanceCard.
+   */
+  leaveBalance: async (p) => {
+    const raw = await unified.getLeaveBalances(p?.employeeId);
+    return (raw || []).map((b: any) => ({
+      leaveType: b.leave_type ?? b.leaveType ?? "",
+      totalDays: b.total_days ?? b.totalDays ?? 0,
+      usedDays: b.used_days ?? b.usedDays ?? 0,
+      remainingDays: b.remaining_days ?? b.remainingDays ?? 0,
+      label:
+        LEAVE_TYPE_LABELS[b.leave_type ?? b.leaveType ?? ""] ??
+        b.leave_type ??
+        b.leaveType ??
+        "",
+    }));
+  },
+
+  /**
+   * requestStatus — transforms raw leave requests to the
+   * { id, type, title, submittedAt, status, details } shape
+   * expected by RequestStatusList.
+   */
+  requestStatus: async (p) => {
+    const raw = await unified.getLeaveRequests(p?.employeeId);
+    return (raw || []).map((r: any) => ({
+      id: r.id,
+      type: "leave" as const,
+      title: `${r.leave_type ?? "Leave"} Leave – ${r.days_requested ?? 1} day(s)`,
+      submittedAt: r.submitted_at ?? r.created_at ?? new Date().toISOString(),
+      status: r.status ?? "pending",
+      details: `${r.start_date ?? ""} to ${r.end_date ?? ""}: ${r.reason ?? ""}`.trim(),
+    }));
+  },
+
+  // ── Manager queries ───────────────────────────────
+  // (already return camelCase from hr-unified)
   pendingApprovals: (p) => unified.getAllPendingApprovals(p?.managerId),
   teamMembers: (p) => unified.getTeamMembers(p?.managerId),
 
-  // HR / system queries
+  // ── HR / system queries ───────────────────────────
   systemMetrics: () => unified.getSystemMetrics(),
-  policies: (p) => (p?.query ? unified.searchPolicies(p.query) : unified.getPolicies()),
-  announcements: (p) => unified.getAnnouncements(p?.role),
-  documents: (p) => unified.getDocuments(p?.role),
-  acknowledgedDocumentIds: (p) => unified.getAcknowledgedDocumentIds(p?.employeeId),
+
+  /**
+   * policies — transforms snake_case policy rows to camelCase
+   */
+  policies: async (p) => {
+    const raw = p?.query
+      ? await unified.searchPolicies(p.query)
+      : await unified.getPolicies();
+    return (raw || []).map((pol: any) => ({
+      id: pol.id,
+      title: pol.title,
+      category: pol.category,
+      content: pol.content,
+      lastUpdated: pol.last_updated ?? pol.lastUpdated ?? pol.created_at ?? "",
+    }));
+  },
+
+  /**
+   * announcements — transforms snake_case announcement rows to camelCase
+   */
+  announcements: async (p) => {
+    const raw = await unified.getAnnouncements(p?.role);
+    return (raw || []).map((a: any) => ({
+      id: a.id,
+      title: a.title,
+      content: a.content,
+      audienceRole: a.audience_role ?? a.audienceRole ?? "all",
+      pinned: a.pinned ?? false,
+      createdAt: a.created_at ?? a.createdAt ?? "",
+      expiresAt: a.expires_at ?? a.expiresAt ?? null,
+    }));
+  },
+
+  /**
+   * documents — transforms snake_case document rows to camelCase
+   */
+  documents: async (p) => {
+    const raw = await unified.getDocuments(p?.role);
+    return (raw || []).map((d: any) => ({
+      id: d.id,
+      title: d.title,
+      description: d.description ?? null,
+      filePath: d.file_path ?? d.filePath ?? "",
+      audienceRole: d.audience_role ?? d.audienceRole ?? "all",
+      requiresAck: d.requires_ack ?? d.requiresAck ?? false,
+      createdAt: d.created_at ?? d.createdAt ?? "",
+      expiresAt: d.expires_at ?? d.expiresAt ?? null,
+    }));
+  },
+
+  acknowledgedDocumentIds: (p) =>
+    unified.getAcknowledgedDocumentIds(p?.employeeId),
+
   allEmployees: () => unified.getAllEmployees(),
 
-  // Analytics queries — real Supabase aggregations with fallbacks
-  attendanceTrends: (p) => analytics.getAttendanceTrends(p?.period, p?.startDate, p?.endDate),
-  leaveAnalytics: (p) => analytics.getLeaveAnalytics(p?.type, p?.startDate, p?.endDate),
-  teamMetrics: (p) => analytics.getTeamMetrics(p?.metric, p?.managerId),
-  hrAnalytics: (p) => analytics.getHRAnalytics(p?.metric),
+  // ── Analytics queries ─────────────────────────────
+  attendanceTrends: (p) =>
+    analytics.getAttendanceTrends(p?.period, p?.startDate, p?.endDate),
+  leaveAnalytics: (p) =>
+    analytics.getLeaveAnalytics(p?.type, p?.startDate, p?.endDate),
+  teamMetrics: (p) =>
+    analytics.getTeamMetrics(p?.metric, p?.managerId),
+  hrAnalytics: (p) =>
+    analytics.getHRAnalytics(p?.metric),
 };
 
 // ============================================

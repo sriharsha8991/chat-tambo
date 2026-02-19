@@ -32,7 +32,12 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
 
 export function AttendanceTimeline({ records = [], maxItems = 7 }: AttendanceTimelineProps) {
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    if (!dateString) return "—";
+    // Append T00:00:00 to date-only strings to force local-time parsing
+    // and avoid off-by-one day errors in timezones behind UTC.
+    const normalized = dateString.includes("T") ? dateString : `${dateString}T00:00:00`;
+    const date = new Date(normalized);
+    if (isNaN(date.getTime())) return dateString;
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);

@@ -372,19 +372,18 @@ type PropsMapper = (
 const PROPS_MAPPERS: Record<string, PropsMapper> = {
   // ── Employee ──────────────────────────────────────
   attendanceStatus: (data, componentName) => {
-    const d = data as {
-      records: any[];
-      summary: any;
-      todayStatus: {
-        isCheckedIn: boolean;
+    const d = (data ?? {}) as {
+      records?: any[];
+      todayStatus?: {
+        isCheckedIn?: boolean;
         checkInTime?: string;
         checkOutTime?: string;
-        hasMissedCheckout: boolean;
+        hasMissedCheckout?: boolean;
       };
     };
 
     if (componentName === "CheckInOutCard") {
-      const t = d.todayStatus;
+      const t = d.todayStatus ?? {};
       return {
         checkInTime: t.checkInTime,
         checkOutTime: t.checkOutTime,

@@ -125,6 +125,416 @@ flowchart TD
 └──────────────────────────────────────────────────────────────┘
 ```
 
+### End-to-End Sequence Diagrams
+
+The following sequence diagrams trace every interaction from application startup to the three core user workflows: **chat-driven actions**, **dashboard rendering**, and **realtime sync**.
+
+---
+
+#### 1. Application Bootstrap
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Browser
+    participant RootLayout as RootLayout (Server)
+    participant CP as ClientProviders
+    participant PP as PersonaProvider
+    participant TW as TamboWrapper
+    participant API as /api/hr
+    participant SB as Supabase
+
+    Browser->>RootLayout: GET / (initial page load)
+    RootLayout->>CP: render ClientProviders
+    CP->>PP: mount PersonaProvider
+    PP->>API: GET ?action=getPersonaUsers
+    API->>SB: SELECT DISTINCT ON (role) FROM employees
+    SB-->>API: 3 rows (employee, manager, hr)
+    API-->>PP: [Priya, Rajesh, Ananya]
+    PP->>PP: setCurrentUser(Priya) + setPersona("employee")
+    PP->>TW: mount TamboWrapper with persona context
+    TW->>TW: build contextHelpers (current_user, user_context, current_time, persona_info)
+    TW->>TW: mount TamboProvider with components[], tools[], contextHelpers
+    TW-->>Browser: App ready — Chat UI rendered
+```
+
+---
+
+#### 2. Chat Workflow — Intent to Rendered Component
+
+This traces the complete flow when a user types a natural language query (e.g., *"Show my leave balance"*) and receives an AI-rendered component.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant ChatUI as ChatPage / MessageInput
+    participant Tambo as TamboProvider
+    participant TamboAI as Tambo AI Cloud
+    participant Tool as Tool Function (hr-api-client)
+    participant APIRoute as /api/hr (Next.js)
+    participant Unified as hr-unified.ts
+    participant SBHR as supabase-hr/*
+    participant DB as Supabase PostgreSQL
+    participant Comp as LeaveBalanceCard
+
+    User->>ChatUI: types "Show my leave balance"
+    ChatUI->>Tambo: sendThreadMessage(text)
+    Tambo->>TamboAI: POST message + contextHelpers + component/tool registry
+
+    Note over TamboAI: AI resolves intent from message + persona context
+
+    TamboAI->>TamboAI: select tool: getLeaveBalance
+    TamboAI->>TamboAI: select component: LeaveBalanceCard
+    TamboAI->>Tool: invoke getLeaveBalance({ employeeId: "ZP-1001" })
+
+    Note over Tool: Zod validates input against inputSchema
+
+    Tool->>APIRoute: GET /api/hr?action=getLeaveBalances&employeeId=ZP-1001
+    APIRoute->>Unified: getLeaveBalances("ZP-1001")
+    Unified->>SBHR: leave-balances.getLeaveBalances("ZP-1001")
+    SBHR->>DB: SELECT * FROM leave_balances WHERE employee_id = $1
+    DB-->>SBHR: [{leave_type: "casual", total_days: 12, used_days: 3, ...}, ...]
+    SBHR-->>Unified: LeaveBalance[]
+    Unified-->>APIRoute: normalized camelCase array
+    APIRoute-->>Tool: JSON response { data: [...] }
+
+    Note over Tool: Zod validates output against outputSchema
+
+    Tool-->>TamboAI: tool result (structured leave data)
+
+    Note over TamboAI: AI maps tool output → component props
+
+    TamboAI-->>Tambo: response with renderedComponent + assistant text
+    Tambo-->>ChatUI: thread updated — new message with component
+    ChatUI->>Comp: render LeaveBalanceCard({ balances: [...] })
+    Comp-->>User: Displays 5 leave types with balances, progress bars
+```
+
+---
+
+#### 3. Chat Workflow — Mutation with Side Effects
+
+This traces a write operation (e.g., *"Mark my check-in"*) including data mutation, UI update, realtime broadcast, and dashboard refresh.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant ChatUI as ChatPage
+    participant TamboAI as Tambo AI Cloud
+    participant Tool as submitCheckInOut
+    participant APIRoute as /api/hr
+    participant Unified as hr-unified.ts
+    participant DB as Supabase PostgreSQL
+    participant Notify as notifyDataUpdate()
+    participant Event as window CustomEvent
+    participant RTMgr as RealtimeManager
+    participant LiveQ as useLiveQuery instances
+    participant Dashboard as PinnedDashboard
+
+    User->>ChatUI: "Mark my check-in for today"
+    ChatUI->>TamboAI: sendMessage + context (persona: employee, user: Priya)
+    TamboAI->>Tool: invoke submitCheckInOut({ type: "check_in", employeeId: "ZP-1001" })
+
+    Tool->>APIRoute: POST /api/hr { action: "checkIn", employeeId: "ZP-1001" }
+    APIRoute->>Unified: addOrUpdateAttendance(...)
+    Unified->>DB: UPSERT INTO attendance (employee_id, date, check_in, status)
+    DB-->>Unified: { id, check_in: "09:15:00", status: "present" }
+    Unified-->>APIRoute: success response
+    APIRoute-->>Tool: { success: true, data: { timestamp: "..." } }
+
+    Note over Tool: After successful mutation, notify data update
+
+    Tool->>Notify: notifyDataUpdate()
+    Notify->>Event: dispatchEvent("hr-data-updated")
+
+    par Local refresh (same tab)
+        Event->>LiveQ: all useLiveQuery instances → fetchData()
+        LiveQ->>Dashboard: widgets re-render with fresh data
+    and Realtime broadcast (cross-tab / cross-user)
+        DB->>RTMgr: Supabase Realtime: INSERT on attendance table
+        RTMgr->>RTMgr: 300ms debounce
+        RTMgr->>LiveQ: fan out to all "attendance" subscribers
+        LiveQ->>Dashboard: widgets re-render
+    end
+
+    Tool-->>TamboAI: tool result
+    TamboAI-->>ChatUI: render CheckInOutCard({ status: "checked_in", checkInTime: "09:15:00" })
+    ChatUI-->>User: ✓ Check-in recorded — card shows checked-in state
+```
+
+---
+
+#### 4. Dashboard Workflow — Widget Rendering
+
+This traces how the pinned dashboard loads, fetches data, and renders widgets independently of the chat flow.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant DashPage as /dashboard page
+    participant PinnedDB as PinnedDashboard
+    participant UsePW as usePinnedWidgets
+    participant APIhr as /api/hr
+    participant SB as Supabase
+    participant WW as WidgetWrapper
+    participant LiveQ as useLiveQuery
+    participant QueryAPI as /api/query
+    participant QR as query-resolver.ts
+    participant Unified as hr-unified.ts
+    participant Mapper as PROPS_MAPPERS
+    participant Comp as HR Component
+
+    User->>DashPage: navigate to /dashboard
+    DashPage->>PinnedDB: render PinnedDashboard
+    PinnedDB->>UsePW: usePinnedWidgets()
+    UsePW->>APIhr: GET ?action=getPinnedWidgets&employeeId=...
+    APIhr->>SB: SELECT * FROM pinned_widgets WHERE employee_id = $1
+    SB-->>APIhr: rows[]
+    APIhr-->>UsePW: PinnedWidget[]
+
+    alt First visit (0 widgets)
+        UsePW->>UsePW: getDashboardPreset(persona)
+        loop for each preset widget
+            UsePW->>APIhr: POST { action: "pinWidget", componentName, queryDescriptor, layout }
+            APIhr->>SB: INSERT INTO pinned_widgets
+            SB-->>APIhr: new row
+            APIhr-->>UsePW: widget created
+        end
+    end
+
+    UsePW-->>PinnedDB: widgets[] ready
+
+    loop for each PinnedWidget
+        PinnedDB->>WW: render WidgetWrapper({ widget })
+        WW->>WW: inject employeeId/managerId into params
+        WW->>LiveQ: useLiveQuery(queryId, params)
+        LiveQ->>QueryAPI: POST /api/query { queryId, params }
+        QueryAPI->>QR: resolveQuery(queryId, params)
+        QR->>Unified: call mapped service function
+        Unified->>SB: Supabase query
+        SB-->>Unified: raw rows
+        Unified-->>QR: data (snake_case → camelCase normalized)
+        QR-->>QueryAPI: { data, queryId, timestamp }
+        QueryAPI-->>LiveQ: JSON response
+        LiveQ-->>WW: data ready
+        WW->>Mapper: mapQueryToProps(queryId, componentName, data)
+        Mapper-->>WW: component-specific props
+        WW->>Comp: render Component({ ...mappedProps })
+        Comp-->>User: Widget displays live data
+    end
+
+    Note over LiveQ: Each widget also subscribes to Supabase Realtime<br/>for auto-refresh via RealtimeManager
+```
+
+---
+
+#### 5. Pinning a Widget — Chat to Dashboard
+
+This traces pinning an AI-rendered component from the chat thread onto the persistent dashboard.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant PinBtn as PinButton (on message)
+    participant UsePW as usePinnedWidgets
+    participant APIhr as /api/hr
+    participant SB as Supabase
+    participant RTChannel as Supabase Realtime
+    participant PinnedDB as PinnedDashboard
+    participant WW as WidgetWrapper
+
+    Note over User: AI rendered LeaveBalanceCard in chat
+
+    User->>PinBtn: click Pin button on chat message
+    PinBtn->>PinBtn: derive queryDescriptor from toolCall or componentName→queryId
+    PinBtn->>UsePW: pin({ componentName: "LeaveBalanceCard", queryDescriptor: { queryId: "leaveBalance", params: {} }, layout: {...} })
+    UsePW->>APIhr: POST { action: "pinWidget", employeeId, componentName, queryDescriptor, layout }
+    APIhr->>SB: INSERT INTO pinned_widgets (...)
+    SB-->>APIhr: new row
+    APIhr-->>UsePW: PinnedWidget
+    UsePW->>UsePW: setWidgets([...prev, newWidget])
+
+    par Cross-tab sync
+        SB->>RTChannel: broadcast INSERT on pinned_widgets
+        RTChannel-->>PinnedDB: realtime event
+        PinnedDB->>UsePW: fetchWidgets() refresh
+    end
+
+    PinnedDB->>WW: render new WidgetWrapper({ widget })
+    WW-->>User: LeaveBalanceCard appears on dashboard with live data
+```
+
+---
+
+#### 6. Realtime Sync — Database Change Propagation
+
+This traces how a database change (e.g., a manager approves a leave request from another tab) propagates to all connected clients.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant ManagerTab as Manager (Tab A)
+    participant APIhr as /api/hr
+    participant DB as Supabase PostgreSQL
+    participant SBRT as Supabase Realtime
+    participant RTMgr as RealtimeManager (singleton)
+    participant Sub1 as Subscriber: ApprovalQueue
+    participant Sub2 as Subscriber: RequestStatusList
+    participant EmployeeTab as Employee (Tab B)
+
+    ManagerTab->>APIhr: POST { action: "approveLeaveRequest", requestId, reviewerId }
+    APIhr->>DB: UPDATE leave_requests SET status = 'approved'
+    DB-->>APIhr: updated row
+    APIhr-->>ManagerTab: { success: true }
+
+    Note over DB,SBRT: Supabase Realtime detects UPDATE on leave_requests
+
+    DB->>SBRT: broadcast change event
+    SBRT->>RTMgr: postgres_changes: UPDATE on leave_requests
+
+    RTMgr->>RTMgr: 300ms debounce timer starts
+    Note over RTMgr: Batches rapid events (e.g., leave balance also updated)
+
+    RTMgr->>Sub1: callback() → ApprovalQueue.fetchData()
+    RTMgr->>Sub2: callback() → RequestStatusList.fetchData()
+
+    par Manager's tab
+        Sub1->>APIhr: re-fetch pending approvals
+        APIhr-->>Sub1: updated list (request removed)
+        Sub1-->>ManagerTab: ApprovalQueue re-renders
+    and Employee's tab
+        Sub2->>APIhr: re-fetch request status
+        APIhr-->>Sub2: updated list (status: approved)
+        Sub2-->>EmployeeTab: RequestStatusList shows "Approved" ✓
+    end
+```
+
+---
+
+#### 7. Persona Switch Flow
+
+This traces what happens when a user switches personas (e.g., Employee → Manager).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant TopBar as TopBar (Persona Dropdown)
+    participant PP as PersonaProvider
+    participant TW as TamboWrapper
+    participant TamboAI as TamboProvider
+    participant Chat as ChatPage
+    participant Dashboard as PinnedDashboard
+    participant API as /api/hr
+
+    User->>TopBar: select "Manager" persona
+    TopBar->>PP: setPersona("manager")
+    PP->>PP: lookup manager user profile (Rajesh Kumar, ZP-0501)
+    PP->>PP: setCurrentUser(Rajesh)
+    PP->>PP: updateUserContext({ pendingApprovals: ... })
+
+    PP->>TW: re-render with new persona/user
+    TW->>TW: rebuild contextHelpers with manager permissions
+    TW->>TamboAI: update TamboProvider context
+
+    par Reset Chat
+        TamboAI->>Chat: create new thread (old thread preserved in history)
+        Chat->>Chat: re-render with manager quick actions + welcome message
+    and Reset Dashboard
+        Dashboard->>API: GET ?action=getPinnedWidgets&employeeId=ZP-0501
+        API-->>Dashboard: manager's pinned widgets (or auto-seed presets)
+        Dashboard->>Dashboard: render ApprovalQueue, TeamOverview, AnnouncementsFeed
+    end
+
+    User-->>User: UI reflects manager persona — team tools, approval actions
+```
+
+---
+
+#### 8. Complete End-to-End — First Visit to Action
+
+This unified diagram shows the full journey from a brand-new user's first page load through their first meaningful interaction.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant Browser
+    participant Layout as RootLayout
+    participant PP as PersonaProvider
+    participant TW as TamboWrapper
+    participant API as /api/hr
+    participant DB as Supabase
+    participant Chat as ChatPage
+    participant TamboAI as Tambo AI Cloud
+    participant Tool as Tool Function
+    participant Comp as HR Component
+    participant Dashboard as PinnedDashboard
+    participant LiveQ as useLiveQuery
+    participant RT as RealtimeManager
+
+    rect rgb(240, 248, 255)
+        Note over User,DB: Phase 1 — Bootstrap
+        User->>Browser: Open localhost:3000
+        Browser->>Layout: GET /
+        Layout->>PP: mount PersonaProvider
+        PP->>API: getPersonaUsers
+        API->>DB: fetch 3 representative employees
+        DB-->>PP: [Priya (employee), Rajesh (manager), Ananya (hr)]
+        PP->>TW: mount with Priya as current user
+        TW->>TW: inject contextHelpers into TamboProvider
+    end
+
+    rect rgb(245, 255, 245)
+        Note over User,Comp: Phase 2 — Chat Interaction
+        User->>Chat: "What is my leave balance?"
+        Chat->>TamboAI: message + context (employee, Priya, ZP-1001)
+        TamboAI->>Tool: getLeaveBalance({ employeeId: "ZP-1001" })
+        Tool->>API: GET /api/hr?action=getLeaveBalances
+        API->>DB: SELECT FROM leave_balances
+        DB-->>Tool: 5 leave types with balances
+        Tool-->>TamboAI: structured result
+        TamboAI-->>Chat: render LeaveBalanceCard
+        Chat->>Comp: display card with 5 leave types + progress bars
+        Comp-->>User: ✓ Sees leave balance
+    end
+
+    rect rgb(255, 250, 240)
+        Note over User,RT: Phase 3 — Pin to Dashboard
+        User->>Chat: click Pin button on LeaveBalanceCard
+        Chat->>API: POST pinWidget(LeaveBalanceCard, leaveBalance)
+        API->>DB: INSERT INTO pinned_widgets
+        DB-->>API: widget saved
+
+        User->>Dashboard: navigate to /dashboard
+        Dashboard->>API: fetch pinned widgets
+        API-->>Dashboard: [LeaveBalanceCard widget]
+        Dashboard->>LiveQ: useLiveQuery("leaveBalance", { employeeId })
+        LiveQ->>API: POST /api/query
+        API->>DB: query leave_balances
+        DB-->>LiveQ: fresh data
+        LiveQ-->>Dashboard: render card with live data
+        LiveQ->>RT: subscribe("leave_requests")
+        RT-->>LiveQ: watching for changes
+    end
+
+    rect rgb(255, 245, 245)
+        Note over User,RT: Phase 4 — Realtime Update
+        Note right of DB: Another user approves a leave request
+        DB->>RT: Realtime: UPDATE on leave_requests
+        RT->>LiveQ: debounced callback
+        LiveQ->>API: re-fetch leave balance
+        API->>DB: SELECT FROM leave_balances
+        DB-->>LiveQ: updated balance
+        LiveQ-->>Dashboard: re-render LeaveBalanceCard
+        Dashboard-->>User: ✓ Sees updated balance automatically
+    end
+```
+
 ---
 
 ## Provider Architecture
